@@ -7,6 +7,7 @@ import 'food.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:typed_data';
 import 'package:image_picker_web/image_picker_web.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 class EngCoursePageEditState extends StatefulWidget {
   EngCoursePageEdit createState() => EngCoursePageEdit();
@@ -15,8 +16,49 @@ class EngCoursePageEditState extends StatefulWidget {
 class EngCoursePageEdit extends State<EngCoursePageEditState> {
   List<String> favorite = [];
   List<String> image = [];
+  Color mycolor = Colors.lightGreen;
 
-  @override
+  void _showPicker(BuildContext context, String docid) {
+    showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Pick a color!'),
+            content: SingleChildScrollView(
+              child: ColorPicker(
+                pickerColor: mycolor, //default color
+                onColorChanged: (Color color) {
+                  //on color picked
+                  setState(() {
+                    mycolor = color;
+                  });
+                },
+              ),
+            ),
+            actions: <Widget>[
+              ElevatedButton(
+                child: const Text('DONE'),
+                onPressed: () {
+                  updateDatabase(docid, mycolor.value);
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: ((context) => EngCoursePageEditState())));
+                  //dismiss the color picker
+                },
+              ),
+            ],
+          );
+        });
+  }
+
+  Future<void> updateDatabase(String docid, int color) async {
+    await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc('Course')
+        .collection('color')
+        .doc(docid)
+        .update({'color': color});
+  }
+
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     return Scaffold(
@@ -47,7 +89,8 @@ class EngCoursePageEdit extends State<EngCoursePageEditState> {
                         'assets/images/anaza.jpg',
                         fit: BoxFit.cover,
                       ),
-                      title: Text('Ushinohone-anaza\n ~ English menu ~'),
+                      title: Text('編集用ページ（店舗用）',
+                          style: TextStyle(color: Colors.white)),
                     ),
                     SliverToBoxAdapter(
                       child: Column(
@@ -55,19 +98,9 @@ class EngCoursePageEdit extends State<EngCoursePageEditState> {
                         children: [
                           spacer(5),
                           menuButtons(),
-                          noticeText(
-                              'The menu is subject to change depending on the availability of ingredients.',
-                              Colors.red),
-                          noticeText(
-                              'Courses is not available without reservations.',
-                              Colors.red),
-                          spacer(5),
-                          noticeText(
-                              'No food or beverages are allowed to be brought in.',
-                              Colors.red),
                           spacer(10),
                           sectionTitlenew(),
-                          spacer(10)
+                          spacer(15)
                         ],
                       ),
                     ),
@@ -98,7 +131,7 @@ class EngCoursePageEdit extends State<EngCoursePageEditState> {
             },
             child: menuButton('Food編集'),
           ),
-          Container(width: 15, height: 50),
+          Container(width: 10, height: 50),
           InkWell(
             onTap: () async {
               await Navigator.of(context).push(MaterialPageRoute(
@@ -106,7 +139,7 @@ class EngCoursePageEdit extends State<EngCoursePageEditState> {
             },
             child: menuButton('Drink編集'),
           ),
-          Container(width: 15, height: 50),
+          Container(width: 10, height: 50),
           InkWell(
             onTap: () async {
               await Navigator.of(context).push(
@@ -114,6 +147,14 @@ class EngCoursePageEdit extends State<EngCoursePageEditState> {
             },
             child: menuButton('編集終了'),
           ),
+          // Container(width: 10, height: 50),
+          // InkWell(
+          //   onTap: () async {
+          //     await Navigator.of(context).push(MaterialPageRoute(
+          //         builder: ((context) => EngLunchPageEditState())));
+          //   },
+          //   child: menuButton('Lunch編集'),
+          // ),
         ],
       );
 
@@ -134,7 +175,13 @@ class EngCoursePageEdit extends State<EngCoursePageEditState> {
                   await Navigator.of(context).push(MaterialPageRoute(
                       builder: ((context) => AddPostnewCourse())));
                 },
-                child: Text('コース追加'))
+                child: Text('コース追加')),
+            SizedBox(width: 10),
+            ElevatedButton(
+                onPressed: () {
+                  _showPicker(context, 'L6IBx5dELRCbv5Qp9tUK');
+                },
+                child: Text('テーマ変更')),
           ]),
         ),
       );
@@ -148,69 +195,85 @@ class EngCoursePageEdit extends State<EngCoursePageEditState> {
                     builder: ((context) =>
                         TitleEditPage(name.id, name['title'], 'Course'))));
               },
-              child: Container(
-                  alignment: Alignment.centerLeft,
-                  decoration: BoxDecoration(
-                      color: Colors.lightGreen,
-                      borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(20),
-                          bottomLeft: Radius.circular(20))),
-                  width: double.infinity,
-                  height: 30,
-                  child: Row(children: [
-                    Text('   ${name['title']}',
-                        style: TextStyle(
-                            fontSize: 20,
-                            fontStyle: FontStyle.italic,
-                            color: Colors.white)),
-                    ElevatedButton(
-                        onPressed: () async {
-                          await Navigator.of(context).push(MaterialPageRoute(
-                              builder: ((context) =>
-                                  AddPostPagenewCourse(name['title']))));
-                        },
-                        child: Text('コースメニュー追加')),
-                  ]))),
+              child: FutureBuilder<QuerySnapshot>(
+                  future: FirebaseFirestore.instance
+                      .collection('Eng')
+                      .doc('Course')
+                      .collection('color')
+                      .get(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData) {
+                      final documents = snapshot.data!.docs;
+                      final color = documents[0]['color'];
+                      return Container(
+                          alignment: Alignment.centerLeft,
+                          decoration: BoxDecoration(
+                              color: Color(color),
+                              borderRadius: BorderRadius.only(
+                                  topLeft: Radius.circular(20),
+                                  bottomLeft: Radius.circular(20))),
+                          width: double.infinity,
+                          height: 30,
+                          child: Row(children: [
+                            Text('   ${name['title']}',
+                                style: TextStyle(
+                                    fontSize: 20,
+                                    fontStyle: FontStyle.italic,
+                                    color: Colors.white)),
+                            ElevatedButton(
+                                onPressed: () async {
+                                  await Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                          builder: ((context) =>
+                                              AddPostPagenewCourse(
+                                                  name['title']))));
+                                },
+                                child: Text('コースメニュー追加')),
+                          ]));
+                    }
+                    return Container();
+                  })),
         ),
-        Container(width: double.infinity, height: 30),
-        menulist(name['title'], size)
+        Container(
+            width: double.infinity,
+            height: 30,
+            decoration: BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(
+              color: Colors.black, // 下線の色
+              width: 2.0, // 下線の太さ
+            )))),
+        menulist(name['title'], size),
+        Container(
+            width: double.infinity,
+            height: 40,
+            decoration: BoxDecoration(
+                border: Border(
+                    top: BorderSide(
+              color: Colors.black, // 下線の色
+              width: 2.0, // 下線の太さ
+            )))),
       ]);
 
   Widget menuButton(String text) => Container(
         alignment: Alignment.center,
-        width: 120,
+        width: 100,
         height: 50,
-        child: Text(text, style: TextStyle(color: Colors.white, fontSize: 20)),
+        child: Text(text, style: TextStyle(color: Colors.white, fontSize: 16)),
         decoration: BoxDecoration(
             color: Color.fromARGB(255, 53, 52, 52),
             borderRadius: BorderRadius.all(Radius.circular(20))),
       );
+}
 
-  Widget courselist(size) => FutureBuilder<QuerySnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('Eng')
-            .doc('Course')
-            .collection("titles")
-            .orderBy('order')
-            .get(),
-        builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            final names = snapshot.data!.docs;
-            return Container(
-                width: double.infinity,
-                height: size.height - 160,
-                child: ListView(
-                  cacheExtent: 250.0 * names.length - 1,
-                  physics: ClampingScrollPhysics(),
-                  children:
-                      names.map((name) => sectionTitle(name, size)).toList(),
-                ));
-          }
-          return Center(child: Text('読込中...'));
-        },
-      );
+class menulist extends StatelessWidget {
+  final String name;
+  final Size size;
+  menulist(this.name, this.size);
 
-  Widget menulist(name, size) => FutureBuilder<QuerySnapshot>(
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<QuerySnapshot>(
         future: FirebaseFirestore.instance
             .collection('Eng')
             .doc('Course')
@@ -222,74 +285,122 @@ class EngCoursePageEdit extends State<EngCoursePageEditState> {
             final titles = snapshot.data!.docs;
             return Container(
                 width: double.infinity,
-                height: size.height - 160,
-                child: ListView(
-                  shrinkWrap: true,
-                  children: titles
-                      .map((title) => coursemenu(title, name, titles.length))
-                      .toList(),
-                ));
+                height: size.height / 2 - 100,
+                child: NotificationListener<ScrollNotification>(
+                    onNotification: (ScrollNotification notification) {
+                      // 上端での下方向スクロールを無視する
+                      if (notification.metrics.pixels ==
+                              notification.metrics.minScrollExtent &&
+                          notification is ScrollUpdateNotification &&
+                          notification.scrollDelta! > 0) {
+                        return true; // イベントを消費して親に伝搬させない
+                      }
+
+                      // 下端でさらに下方向にスクロールした場合、親ビューをスクロール
+                      if (notification.metrics.pixels ==
+                              notification.metrics.maxScrollExtent &&
+                          notification is OverscrollNotification) {
+                        Scrollable.ensureVisible(
+                          context,
+                          duration: Duration(milliseconds: 1500),
+                          alignment: 0.1, // 親ビューのスクロール位置を下端に調整
+                        );
+                        return true; // イベントを消費
+                      }
+
+                      // 上端で上方向スクロールした場合、親ビューをスクロール
+                      if (notification.metrics.pixels ==
+                              notification.metrics.minScrollExtent &&
+                          notification is OverscrollNotification) {
+                        Scrollable.ensureVisible(
+                          context,
+                          duration: Duration(milliseconds: 1500),
+                          alignment: 0.9, // 親ビューのスクロール位置を上端に調整
+                        );
+                        return true; // イベントを消費
+                      }
+
+                      return false; // 他のリスナーにも通知を伝える
+                    },
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: titles
+                          .map(
+                              (title) => coursemenu(title, name, titles.length))
+                          .toList(),
+                    )));
           }
           return Center(child: Text('読込中...'));
-        },
-      );
+        });
+  }
+}
 
-  Widget coursemenu(DocumentSnapshot title, String name, length) {
+class coursemenu extends StatelessWidget {
+  final DocumentSnapshot title;
+  final String name;
+  final length;
+  coursemenu(this.title, this.name, this.length);
+
+  @override
+  Widget build(BuildContext context) {
     String docid = title.id;
     return InkWell(
-      onTap: () async {
-        await Navigator.of(context).push(MaterialPageRoute(
-            builder: ((context) => AddPostPageCourse(docid, name))));
-      },
-      child: Column(
-        children: [
-          Text(title['title'], style: TextStyle(fontSize: 20)),
-          Text(title['discription'], style: TextStyle(fontSize: 15)),
-          Text("${title['ja']}(タップで編集)"),
-          ElevatedButton(
-              onPressed: () async {
-                await uploadPicture('Course', name, title['title'], docid);
-              },
-              child: Text('画像UP')),
-          IconButton(
-              onPressed: () async {
-                await FirebaseFirestore.instance
-                    .collection('Eng')
-                    .doc('Course')
-                    .collection(name)
-                    .doc(docid)
-                    .delete();
-                if (length == 1) {
-                  await FirebaseFirestore.instance
-                      .collection('Eng')
-                      .doc('Course')
-                      .collection('titles')
-                      .where('title', isEqualTo: name)
-                      .get()
-                      .then((QuerySnapshot querySnapshot) {
-                    querySnapshot.docs.forEach((doc) {
-                      FirebaseFirestore.instance
+        onTap: () async {
+          await Navigator.of(context).push(MaterialPageRoute(
+              builder: ((context) => AddPostPageCourse(docid, name))));
+        },
+        child: Container(
+          width: 300,
+          constraints: BoxConstraints(minHeight: 30),
+          child: Column(
+            children: [
+              Text(title['title'], style: TextStyle(fontSize: 20)),
+              Text(title['discription'], style: TextStyle(fontSize: 15)),
+              Text("${title['ja']}(タップで編集)"),
+              ElevatedButton(
+                  onPressed: () async {
+                    await uploadPicture('Course', name, title['title'], docid);
+                  },
+                  child: Text('画像UP')),
+              IconButton(
+                  onPressed: () async {
+                    await FirebaseFirestore.instance
+                        .collection('Eng')
+                        .doc('Course')
+                        .collection(name)
+                        .doc(docid)
+                        .delete();
+                    if (length == 1) {
+                      await FirebaseFirestore.instance
                           .collection('Eng')
                           .doc('Course')
                           .collection('titles')
-                          .doc(doc.id)
+                          .where('title', isEqualTo: name)
+                          .get()
+                          .then((QuerySnapshot querySnapshot) {
+                        querySnapshot.docs.forEach((doc) {
+                          FirebaseFirestore.instance
+                              .collection('Eng')
+                              .doc('Course')
+                              .collection('titles')
+                              .doc(doc.id)
+                              .delete();
+                        });
+                      });
+                    }
+                    if (title['image'] != "") {
+                      await FirebaseStorage.instance
+                          .ref()
+                          .child('images/Course/$name/${title['title']}.jpeg')
                           .delete();
-                    });
-                  });
-                }
-                if (title['image'] != "") {
-                  await FirebaseStorage.instance
-                      .ref()
-                      .child('images/Course/$name/${title['title']}.jpeg')
-                      .delete();
-                }
-                Navigator.of(context).push(MaterialPageRoute(
-                    builder: ((context) => EngCoursePageEditState())));
-              },
-              icon: Icon(Icons.delete))
-        ],
-      ),
-    );
+                    }
+                    Navigator.of(context).push(MaterialPageRoute(
+                        builder: ((context) => EngCoursePageEditState())));
+                  },
+                  icon: Icon(Icons.delete))
+            ],
+          ),
+        ));
   }
 }
 

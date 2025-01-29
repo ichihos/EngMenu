@@ -4,104 +4,107 @@ import 'food.dart';
 import 'drink.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class EngCoursePageState extends StatefulWidget {
-  EngCoursePage createState() => EngCoursePage();
+class EngCoursePage extends StatefulWidget {
+  @override
+  _EngCoursePageState createState() => _EngCoursePageState();
 }
 
-class EngCoursePage extends State<EngCoursePageState> {
-  List<String> favorite = [];
+class _EngCoursePageState extends State<EngCoursePage> {
   List<String> image = [];
-  final url = Uri.parse(
+  final Uri instagramUrl = Uri.parse(
       "https://www.instagram.com/anaza_ushinohone?igsh=MmdqMHA0ZW03NzFl");
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     return Scaffold(
-        body: FutureBuilder<QuerySnapshot>(
-            future: FirebaseFirestore.instance
-                .collection('Eng')
-                .doc('Course')
-                .collection('titles')
-                .orderBy('order')
-                .get(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(child: CircularProgressIndicator());
-              }
-              if (!snapshot.hasData) {
-                return Center(child: Text('No data available'));
-              }
-              final titles = snapshot.data!.docs;
-              return CustomScrollView(
-                  cacheExtent: 250.0 * titles.length - 1,
-                  // physics: NeverScrollableScrollPhysics(),
-                  // child:
-                  slivers: <Widget>[
-                    SliverAppBar(
-                      actions: [
-                        InkWell(
-                          child: Image.asset('assets/images/insta.png'),
-                          onTap: () {
-                            _launchUrl(url);
-                          },
-                        )
-                      ],
-                      centerTitle: true,
-                      floating: true,
-                      flexibleSpace: Image.asset(
-                        'assets/images/anaza.jpg',
-                        fit: BoxFit.cover,
-                      ),
-                      title: Text('Ushinohone-anaza\n ~ English menu ~', style: TextStyle(color: Colors.white)),
-                    ),
-                    SliverToBoxAdapter(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          spacer(5),
-                          menuButtons(),
-                          noticeText2(
-                              'Additional 10% service charge will be added.',
-                              Colors.red,
-                              17),
-                          noticeText(
-                              'The menu is subject to change depending on the availability of ingredients.',
-                              Colors.red),
-                          noticeText(
-                              'Courses is not available without reservations.',
-                              Colors.red),
-                          spacer(10)
-                        ],
-                      ),
-                    ),
-                    SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                      (BuildContext context, int index) {
-                        var title = snapshot.data!.docs[index];
-                        return sectionTitle(title, size);
-                      },
-                      childCount: snapshot.data!.docs.length,
-                    ))
-                  ]);
-            }));
+      body: FutureBuilder<QuerySnapshot>(
+        future: FirebaseFirestore.instance
+            .collection('Eng')
+            .doc('Course')
+            .collection('titles')
+            .orderBy('order')
+            .get(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(child: Text('No data available'));
+          }
+          final titles = snapshot.data!.docs;
+          return CustomScrollView(
+            cacheExtent: 250.0 * titles.length - 1,
+            slivers: <Widget>[
+              SliverAppBar(
+                actions: [
+                  IconButton(
+                    icon: Image.asset('assets/images/insta.png'),
+                    onPressed: () => _launchUrl(instagramUrl),
+                  ),
+                ],
+                centerTitle: true,
+                floating: true,
+                flexibleSpace: Image.asset(
+                  'assets/images/anaza.jpg',
+                  fit: BoxFit.cover,
+                ),
+                title: Text(
+                  'Ushinohone-anaza\n ~ English menu ~',
+                  style: TextStyle(color: Colors.white),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(height: 5),
+                    menuButtons(),
+                    noticeText('Additional 10% service charge will be added.',
+                        Colors.red, 15, true),
+                    noticeText(
+                        'The menu is subject to change depending on the availability of ingredients.',
+                        Colors.red,
+                        12,
+                        false),
+                    noticeText(
+                        'Courses are not available without reservations.',
+                        Colors.red,
+                        12,
+                        false),
+                    SizedBox(height: 10),
+                  ],
+                ),
+              ),
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => sectionTitle(titles[index], size),
+                  childCount: titles.length,
+                ),
+              )
+            ],
+          );
+        },
+      ),
+    );
   }
 
-  Widget spacer(double height) => Container(padding: EdgeInsets.all(height));
-
-  Widget noticeText(String text, Color color) =>
-      Text(text, style: TextStyle(color: color), textAlign: TextAlign.left);
-
-  Widget noticeText2(String text, Color color, double size) => Text(text,
+  Widget noticeText(String text, Color color, double size, bool underline) {
+    return Text(
+      text,
       style: TextStyle(
-          color: color, fontSize: size, decoration: TextDecoration.underline),
-      textAlign: TextAlign.left);
+        color: color,
+        fontSize: size,
+        decoration: underline ? TextDecoration.underline : TextDecoration.none,
+      ),
+      textAlign: TextAlign.left,
+    );
+  }
 
   Widget menuButtons() => Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Container(width: 20, height: 50),
           InkWell(
             onTap: () async {
               await Navigator.of(context).push(
@@ -109,7 +112,7 @@ class EngCoursePage extends State<EngCoursePageState> {
             },
             child: menuButton('Foods'),
           ),
-          Container(width: 15, height: 50),
+          Container(width: 10, height: 50),
           InkWell(
             onTap: () async {
               await Navigator.of(context).push(MaterialPageRoute(
@@ -117,32 +120,62 @@ class EngCoursePage extends State<EngCoursePageState> {
             },
             child: menuButton('Drinks'),
           ),
-          Container(width: 15, height: 50),
-          menuButton('Courses'),
+          Container(width: 10, height: 50),
+          menuButton3('Courses'),
         ],
       );
 
-  Widget sectionTitle(DocumentSnapshot name, size) => Column(children: <Widget>[
+  Widget sectionTitle(title, size) => Column(children: <Widget>[
         Align(
-          alignment: Alignment.centerLeft,
-          child: Container(
             alignment: Alignment.centerLeft,
-            decoration: BoxDecoration(
-                color: Colors.lightGreen,
-                borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    bottomLeft: Radius.circular(20))),
+            child: FutureBuilder<QuerySnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('Eng')
+                    .doc('Course')
+                    .collection('color')
+                    .get(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    final documents = snapshot.data!.docs;
+                    final color = documents[0]['color'];
+                    final coursetitle = title['title'];
+                    return Container(
+                      alignment: Alignment.centerLeft,
+                      decoration: BoxDecoration(
+                          color: Color(color),
+                          borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(20),
+                              bottomLeft: Radius.circular(20))),
+                      width: double.infinity,
+                      height: 30,
+                      child: Text('   $coursetitle',
+                          style: TextStyle(
+                              fontSize: 20,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.white)),
+                    );
+                  }
+                  return Container();
+                })),
+        Container(
             width: double.infinity,
             height: 30,
-            child: Text('   ${name['title']}',
-                style: TextStyle(
-                    fontSize: 20,
-                    fontStyle: FontStyle.italic,
-                    color: Colors.white)),
-          ),
-        ),
-        Container(width: double.infinity, height: 30),
-        menulist(name['title'], size)
+            decoration: BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(
+              color: Colors.black, // 下線の色
+              width: 2.0, // 下線の太さ
+            )))),
+        menulist(title['title'], size, image),
+        Container(
+            width: double.infinity,
+            height: 40,
+            decoration: BoxDecoration(
+                border: Border(
+                    top: BorderSide(
+              color: Colors.black, // 下線の色
+              width: 2.0, // 下線の太さ
+            )))),
       ]);
 
   Widget menuButton(String text) => Container(
@@ -152,45 +185,29 @@ class EngCoursePage extends State<EngCoursePageState> {
         child: Text(text, style: TextStyle(color: Colors.white, fontSize: 25)),
         decoration: BoxDecoration(
             color: Color.fromARGB(255, 53, 52, 52),
-            borderRadius: BorderRadius.all(Radius.circular(20))),
+            borderRadius: BorderRadius.all(Radius.circular(16))),
       );
 
-  Widget menuButton2(String text) => Container(
+  Widget menuButton3(String text) => Container(
         alignment: Alignment.center,
-        width: 70,
-        height: 25,
-        child:
-            Text(text, style: TextStyle(color: Colors.white, fontSize: 12.5)),
+        width: 100,
+        height: 50,
+        child: Text(text, style: TextStyle(color: Colors.black, fontSize: 25)),
         decoration: BoxDecoration(
-            color: Color.fromARGB(255, 53, 52, 52),
+            color: Color.fromARGB(255, 223, 221, 221),
             borderRadius: BorderRadius.all(Radius.circular(20))),
       );
+}
 
-  Widget courselist(size) => FutureBuilder<QuerySnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('Eng')
-            .doc('Course')
-            .collection("titles")
-            .orderBy('order')
-            .get(),
-        builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            final names = snapshot.data!.docs;
-            return Container(
-                width: double.infinity,
-                height: size.height - 160,
-                child: ListView(
-                  cacheExtent: 250.0 * names.length - 1,
-                  physics: ClampingScrollPhysics(),
-                  children:
-                      names.map((name) => sectionTitle(name, size)).toList(),
-                ));
-          }
-          return Center(child: Text('読込中...'));
-        },
-      );
+class menulist extends StatelessWidget {
+  final String name;
+  final Size size;
+  final List<String> image;
+  menulist(this.name, this.size, this.image);
 
-  Widget menulist(name, size) => FutureBuilder<QuerySnapshot>(
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<QuerySnapshot>(
         future: FirebaseFirestore.instance
             .collection('Eng')
             .doc('Course')
@@ -202,34 +219,64 @@ class EngCoursePage extends State<EngCoursePageState> {
             final titles = snapshot.data!.docs;
             return Container(
                 width: double.infinity,
-                height: size.height - 160,
-                child: ListView(
-                  children: titles.map((title) => coursemenu(title)).toList(),
-                ));
+                height: size.height / 2 - 100,
+                child: NotificationListener<ScrollNotification>(
+                    onNotification: (ScrollNotification notification) {
+                      // 上端での下方向スクロールを無視する
+                      if (notification.metrics.pixels ==
+                              notification.metrics.minScrollExtent &&
+                          notification is ScrollUpdateNotification &&
+                          notification.scrollDelta! > 0) {
+                        return true; // イベントを消費して親に伝搬させない
+                      }
+
+                      // 下端でさらに下方向にスクロールした場合、親ビューをスクロール
+                      if (notification.metrics.pixels ==
+                              notification.metrics.maxScrollExtent &&
+                          notification is OverscrollNotification) {
+                        Scrollable.ensureVisible(
+                          context,
+                          duration: Duration(milliseconds: 1500),
+                          alignment: 0.1, // 親ビューのスクロール位置を下端に調整
+                        );
+                        return true; // イベントを消費
+                      }
+
+                      // 上端で上方向スクロールした場合、親ビューをスクロール
+                      if (notification.metrics.pixels ==
+                              notification.metrics.minScrollExtent &&
+                          notification is OverscrollNotification) {
+                        Scrollable.ensureVisible(
+                          context,
+                          duration: Duration(milliseconds: 1500),
+                          alignment: 0.9, // 親ビューのスクロール位置を上端に調整
+                        );
+                        return true; // イベントを消費
+                      }
+
+                      return false; // 他のリスナーにも通知を伝える
+                    },
+                    child: ListView(
+                      children: titles
+                          .map((title) => coursemenu(title, image))
+                          .toList(),
+                    )));
           }
           return Center(child: Text('読込中...'));
-        },
-      );
+        });
+  }
+}
 
-  Widget coursemenu(DocumentSnapshot title) {
+class coursemenu extends StatelessWidget {
+  final DocumentSnapshot title;
+  final List<String> image;
+  coursemenu(this.title, this.image);
+
+  @override
+  Widget build(BuildContext context) {
     final isImage = image.contains(title['ja']);
     final imageok = title['image'] != "";
-    final url = Uri.parse(
-        "https://www.google.com/search?tbm=isch&q=${Uri.encodeQueryComponent(title['ja'])}");
     return InkWell(
-      onTap: () {
-        if (!imageok) {
-          _launchUrl(url);
-        } else {
-          setState(() {
-            if (isImage) {
-              image.remove(title['ja']);
-            } else {
-              image.add(title['ja']);
-            }
-          });
-        }
-      },
       child: Column(
         children: [
           Text(title['title'], style: TextStyle(fontSize: 20)),

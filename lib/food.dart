@@ -113,9 +113,7 @@ class EngPage extends State<EngPageState> {
 
   Widget menuButtons() => Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Container(width: 20, height: 50),
           InkWell(
             onTap: () async {
               if (count < 7) {
@@ -128,7 +126,7 @@ class EngPage extends State<EngPageState> {
             },
             child: menuButton3('Foods'),
           ),
-          Container(width: 15, height: 50),
+          Container(width: 10, height: 50),
           InkWell(
             onTap: () async {
               await Navigator.of(context).push(MaterialPageRoute(
@@ -136,13 +134,13 @@ class EngPage extends State<EngPageState> {
             },
             child: menuButton('Drinks'),
           ),
-          Container(width: 30, height: 50),
+          Container(width: 10, height: 50),
           InkWell(
             onTap: () async {
-              await Navigator.of(context).push(MaterialPageRoute(
-                  builder: ((context) => EngCoursePageState())));
+              await Navigator.of(context).push(
+                  MaterialPageRoute(builder: ((context) => EngCoursePage())));
             },
-            child: menuButton2('Courses'),
+            child: menuButton('Courses'),
           ),
         ],
       );
@@ -154,18 +152,7 @@ class EngPage extends State<EngPageState> {
         child: Text(text, style: TextStyle(color: Colors.white, fontSize: 25)),
         decoration: BoxDecoration(
             color: Color.fromARGB(255, 53, 52, 52),
-            borderRadius: BorderRadius.all(Radius.circular(20))),
-      );
-
-  Widget menuButton2(String text) => Container(
-        alignment: Alignment.center,
-        width: 70,
-        height: 25,
-        child:
-            Text(text, style: TextStyle(color: Colors.white, fontSize: 12.5)),
-        decoration: BoxDecoration(
-            color: Color.fromARGB(255, 53, 52, 52),
-            borderRadius: BorderRadius.all(Radius.circular(20))),
+            borderRadius: BorderRadius.all(Radius.circular(16))),
       );
 
   Widget menuButton3(String text) => Container(
@@ -224,13 +211,17 @@ class EngPage extends State<EngPageState> {
                         topLeft: Radius.circular(20),
                         bottomLeft: Radius.circular(20))),
                 width: double.infinity,
-                height: 30,
-                child: Text('   $title',
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontStyle: FontStyle.italic,
-                        color: Colors.white)),
-              );
+                  constraints: BoxConstraints(minHeight: 30),
+                  child: Wrap(children: [
+                    Padding(
+                      padding: EdgeInsets.only(left: 15),
+                      child: Text('$title',
+                          style: TextStyle(
+                              fontSize: 20,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.white)),
+                    )
+                  ]));
             }
             return Container();
           }));
