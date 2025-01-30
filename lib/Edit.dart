@@ -7,16 +7,25 @@ import 'foodEdit.dart';
 import 'courseEdit.dart';
 import 'package:firebase_vertexai/firebase_vertexai.dart';
 
+/// ------------------------------
+/// 共通で使う関数やウィジェット
+/// ------------------------------
+
+/// 日本語メニューを英語に翻訳する（Vertex AI）。
 Future<void> translateMenu(
-    String japanesemenu, ValueNotifier<String> translated) async {
+  String japanesemenu,
+  ValueNotifier<String> translated,
+) async {
   final model =
       FirebaseVertexAI.instance.generativeModel(model: 'gemini-2.0-flash-exp');
 
-  final prompt =
-      '次の日本の料理屋のメニューを英語にしてください。厳密に訳す必要はありません。どういった料理か伝わるようにお願いします。返答は翻訳後の料理名のみで。料理名：$japanesemenu';
+  final prompt = '''
+次の日本の料理屋のメニューを英語にしてください。厳密に訳す必要はありません。
+どういった料理か伝わるようにお願いします。返答は翻訳後の料理名のみで。
+料理名：$japanesemenu
+''';
 
   final response = await model.generateContent([Content.text(prompt)]);
-
   if (response.text != null) {
     translated.value = response.text!;
   } else {
@@ -24,36 +33,90 @@ Future<void> translateMenu(
   }
 }
 
-class AddPostPageFood extends StatefulWidget {
+/// テキストフィールドの共通ウィジェット
+/// テキストフィールドの共通ウィジェット
+Widget buildTextFormField({
+  required String label,
+  TextEditingController? controller,
+  ValueChanged<String>? onChanged, // ← 追加
+  int maxLines = 3,
+}) {
+  return TextFormField(
+    decoration: InputDecoration(labelText: label),
+    keyboardType: TextInputType.multiline,
+    controller: controller,
+    maxLines: maxLines,
+    onChanged: onChanged, // ← ここで受け取ってそのまま渡す
+  );
+}
+
+/// ------------------------------
+/// フード・ドリンク編集のベースクラス
+/// ------------------------------
+
+/// 「Food」や「Drink」など、トップレベルの doc を切り替えられるようにしたベースクラス。
+abstract class BaseAddPostPage extends StatefulWidget {
+  final String topDoc; // "Food" or "Drink" など
   final String collection;
   final String docid;
 
-  const AddPostPageFood(this.collection, this.docid, {super.key});
-
-  @override
-  _AddPostPageFoodState createState() => _AddPostPageFoodState();
+  const BaseAddPostPage({
+    Key? key,
+    required this.topDoc,
+    required this.collection,
+    required this.docid,
+  }) : super(key: key);
 }
 
-class _AddPostPageFoodState extends State<AddPostPageFood> {
-  // 入力した投稿メッセージ
-  String goods = '';
-  String cost = '';
-  String japanese = '';
-  String order = '';
-  final goodsController = TextEditingController();
-  final costController = TextEditingController();
-  final japaneseController = TextEditingController();
-  final orderController = TextEditingController();
+/// State も共通化
+abstract class BaseAddPostPageState<T extends BaseAddPostPage>
+    extends State<T> {
+  final TextEditingController goodsController = TextEditingController();
+  final TextEditingController costController = TextEditingController();
+  final TextEditingController japaneseController = TextEditingController();
+  final TextEditingController orderController = TextEditingController();
   final ValueNotifier<String> translated = ValueNotifier<String>('');
 
   @override
   void dispose() {
-    // コントローラを破棄
     goodsController.dispose();
     costController.dispose();
     japaneseController.dispose();
     orderController.dispose();
     super.dispose();
+  }
+
+  /// Firestore から取得してコントローラに反映
+  Future<void> _loadData() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc(widget.topDoc) // Food or Drink
+        .collection(widget.collection)
+        .doc(widget.docid)
+        .get();
+
+    if (snap.exists) {
+      final data = snap.data() as Map<String, dynamic>;
+      goodsController.text = data['goods'] ?? '';
+      costController.text = data['cost'] ?? '';
+      japaneseController.text = data['ja'] ?? '';
+      orderController.text = data['order'] ?? '';
+    }
+  }
+
+  /// Firestore にアップデート
+  Future<void> updateDatabase() async {
+    await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc(widget.topDoc)
+        .collection(widget.collection)
+        .doc(widget.docid)
+        .update({
+      'goods': goodsController.text,
+      'cost': costController.text,
+      'ja': japaneseController.text,
+      'order': orderController.text,
+    });
   }
 
   @override
@@ -62,91 +125,77 @@ class _AddPostPageFoodState extends State<AddPostPageFood> {
       appBar: AppBar(
         title: const Text('メニュー編集'),
       ),
-      body: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('Eng')
-            .doc('Food')
-            .collection(widget.collection)
-            .doc(widget.docid)
-            .get(),
+      body: FutureBuilder(
+        future: _loadData(),
         builder: (context, snapshot) {
+          // ロード中
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
+          // エラー
           if (snapshot.hasError) {
             return const Center(child: Text("エラーが発生しました"));
           }
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text("データが存在しません"));
-          }
 
-          if (snapshot.connectionState == ConnectionState.done) {
-            Map<String, dynamic> data =
-                snapshot.data!.data() as Map<String, dynamic>;
-            goodsController.text = data['goods'] ?? '';
-            costController.text = data['cost'] ?? '';
-            japaneseController.text = data['ja'] ?? '';
-            orderController.text = data['order'] ?? '';
-          }
-
-          Map<String, dynamic> data =
-              snapshot.data!.data() as Map<String, dynamic>;
-          goods = data['goods'] ?? '';
-          cost = data['cost'] ?? '';
-          japanese = data['ja'] ?? '';
-          order = data['order'] ?? '';
-
+          // データ取得完了
           return SingleChildScrollView(
-            child: Container(
+            child: Padding(
               padding: const EdgeInsets.all(32),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  buildTextFormField('品名(日本語)', japaneseController),
+                  buildTextFormField(
+                    label: '品名(日本語)',
+                    controller: japaneseController,
+                  ),
                   ElevatedButton(
-                      onPressed: () async {
-                        String japanesemenu = japaneseController.text;
-                        await translateMenu(japanesemenu, translated);
-                        goodsController.text = translated.value;
-                      },
-                      child: const Text('↑翻訳↓')),
+                    onPressed: () async {
+                      await translateMenu(
+                        japaneseController.text,
+                        translated,
+                      );
+                      goodsController.text = translated.value;
+                    },
+                    child: const Text('↑翻訳↓'),
+                  ),
                   ValueListenableBuilder<String>(
-                      valueListenable: translated,
-                      builder: (context, value, child) {
-                        return buildTextFormField('品名(英語)', goodsController);
-                      }),
-                  buildTextFormField('値段', costController),
-                  buildTextFormField('順番', orderController),
-                  const SizedBox(height: 8),
+                    valueListenable: translated,
+                    builder: (context, value, child) {
+                      return buildTextFormField(
+                        label: '品名(英語)',
+                        controller: goodsController,
+                      );
+                    },
+                  ),
+                  buildTextFormField(label: '値段', controller: costController),
+                  buildTextFormField(label: '順番', controller: orderController),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
                       ElevatedButton(
-                          onPressed: () async {
-                            await updateDatabase(
-                                widget.collection, widget.docid);
-                            Navigator.of(context).push(MaterialPageRoute(
-                                builder: ((context) => EngPageEditState())));
-                          },
-                          child: const Text("続けて編集")),
+                        onPressed: () async {
+                          await updateDatabase();
+                          onPressedContinueEdit();
+                        },
+                        child: const Text("続けて編集"),
+                      ),
+                      const SizedBox(width: 8),
                       ElevatedButton(
-                          onPressed: () async {
-                            await updateDatabase(
-                                widget.collection, widget.docid);
-                            Navigator.of(context).push(MaterialPageRoute(
-                                builder: ((context) => EngPageState())));
-                          },
-                          child: const Text("ホームに戻る")),
+                        onPressed: () async {
+                          await updateDatabase();
+                          onPressedGoHome();
+                        },
+                        child: const Text("ホームに戻る"),
+                      ),
+                      const SizedBox(width: 8),
                       ElevatedButton(
-                          onPressed: () async {
-                            Navigator.of(context).pop();
-                          },
-                          child: const Text("キャンセル"))
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text("キャンセル"),
+                      ),
                     ],
                   ),
-                  Container(
-                    height: 150,
-                  )
+                  const SizedBox(height: 150),
                 ],
               ),
             ),
@@ -156,298 +205,176 @@ class _AddPostPageFoodState extends State<AddPostPageFood> {
     );
   }
 
-  Widget buildTextFormField(String label, TextEditingController controller) {
-    return TextFormField(
-      decoration: InputDecoration(labelText: label),
-      keyboardType: TextInputType.multiline,
-      controller: controller,
-      maxLines: 3,
+  /// 「続けて編集」ボタンの挙動（各ページでオーバーライドする場合はここでメソッドを定義）
+  void onPressedContinueEdit();
+
+  /// 「ホームに戻る」ボタンの挙動（同上）
+  void onPressedGoHome();
+}
+
+/// ------------------------------
+/// Food / Drink 編集ページ
+/// ------------------------------
+
+class AddPostPageFood extends BaseAddPostPage {
+  const AddPostPageFood(String collection, String docid, {Key? key})
+      : super(topDoc: 'Food', collection: collection, docid: docid, key: key);
+
+  @override
+  AddPostPageFoodState createState() => AddPostPageFoodState();
+}
+
+class AddPostPageFoodState extends BaseAddPostPageState<AddPostPageFood> {
+  @override
+  void onPressedContinueEdit() {
+    // 続けて編集時の画面遷移（例：フード編集一覧ページへ）
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => EngPageEditState()),
     );
   }
 
-  Future<void> updateDatabase(String collection, String docid) async {
-    await FirebaseFirestore.instance
-        .collection('Eng')
-        .doc('Food')
-        .collection(collection)
-        .doc(docid)
-        .update({
-      'goods': goodsController.text,
-      'cost': costController.text,
-      'ja': japaneseController.text,
-      'order': orderController.text
-    });
+  @override
+  void onPressedGoHome() {
+    // ホーム画面へ戻る
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => EngPageState()),
+    );
   }
 }
 
-class AddPostPageDrink extends StatefulWidget {
-  final String collection;
-  final String docid;
-
-  const AddPostPageDrink(this.collection, this.docid, {super.key});
+class AddPostPageDrink extends BaseAddPostPage {
+  const AddPostPageDrink(String collection, String docid, {Key? key})
+      : super(topDoc: 'Drink', collection: collection, docid: docid, key: key);
 
   @override
-  _AddPostPageDrinkState createState() => _AddPostPageDrinkState();
+  AddPostPageDrinkState createState() => AddPostPageDrinkState();
 }
 
-class _AddPostPageDrinkState extends State<AddPostPageDrink> {
-  // 入力した投稿メッセージ
-  String goods = '';
-  String cost = '';
-  String japanese = '';
-  String order = '';
-  final goodsController = TextEditingController();
-  final costController = TextEditingController();
-  final japaneseController = TextEditingController();
-  final orderController = TextEditingController();
-  final ValueNotifier<String> translated = ValueNotifier<String>('');
-
+class AddPostPageDrinkState extends BaseAddPostPageState<AddPostPageDrink> {
   @override
-  void dispose() {
-    // コントローラを破棄
-    goodsController.dispose();
-    costController.dispose();
-    japaneseController.dispose();
-    orderController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('メニュー編集'),
-      ),
-      body: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('Eng')
-            .doc('Drink')
-            .collection(widget.collection)
-            .doc(widget.docid)
-            .get(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return const Center(child: Text("エラーが発生しました"));
-          }
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text("データが存在しません"));
-          }
-
-          if (snapshot.connectionState == ConnectionState.done) {
-            Map<String, dynamic> data =
-                snapshot.data!.data() as Map<String, dynamic>;
-            goodsController.text = data['goods'] ?? '';
-            costController.text = data['cost'] ?? '';
-            japaneseController.text = data['ja'] ?? '';
-            orderController.text = data['order'] ?? '';
-          }
-
-          return SingleChildScrollView(
-            child: Container(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  buildTextFormField('品名(日本語)', japaneseController),
-                  ElevatedButton(
-                      onPressed: () async {
-                        String japanesemenu = japaneseController.text;
-                        await translateMenu(japanesemenu, translated);
-                        goodsController.text = translated.value;
-                      },
-                      child: const Text('↑翻訳↓')),
-                  ValueListenableBuilder<String>(
-                      valueListenable: translated,
-                      builder: (context, value, child) {
-                        return buildTextFormField('品名(英語)', goodsController);
-                      }),
-                  buildTextFormField('値段', costController),
-                  buildTextFormField('順番', orderController),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      ElevatedButton(
-                          onPressed: () async {
-                            await updateDatabase(
-                                widget.collection, widget.docid);
-                            Navigator.of(context).push(MaterialPageRoute(
-                                builder: ((context) =>
-                                    EngDrinkEditPageState())));
-                          },
-                          child: const Text("続けて編集")),
-                      ElevatedButton(
-                          onPressed: () async {
-                            await updateDatabase(
-                                widget.collection, widget.docid);
-                            Navigator.of(context).push(MaterialPageRoute(
-                                builder: ((context) => EngPageState())));
-                          },
-                          child: const Text("ホームに戻る")),
-                      ElevatedButton(
-                          onPressed: () async {
-                            Navigator.of(context).pop();
-                          },
-                          child: const Text("キャンセル"))
-                    ],
-                  ),
-                  Container(
-                    height: 150,
-                  )
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+  void onPressedContinueEdit() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => EngDrinkEditPageState()),
     );
   }
 
-  Widget buildTextFormField(String label, TextEditingController controller) {
-    return TextFormField(
-      decoration: InputDecoration(labelText: label),
-      keyboardType: TextInputType.multiline,
-      controller: controller,
-      maxLines: 3,
+  @override
+  void onPressedGoHome() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => EngPageState()),
     );
   }
-
-  Future<void> updateDatabase(String collection, String docid) async {
-    await FirebaseFirestore.instance
-        .collection('Eng')
-        .doc('Drink')
-        .collection(collection)
-        .doc(docid)
-        .update({
-      'goods': goodsController.text,
-      'cost': costController.text,
-      'ja': japaneseController.text,
-      'order': orderController.text
-    });
-  }
 }
 
-class AddPostPageFoodnew extends StatefulWidget {
-  final String collection;
+/// ------------------------------
+/// フード・ドリンクの新規追加クラス（ベース）
+/// ------------------------------
 
-  const AddPostPageFoodnew(this.collection, {super.key});
-  @override
-  _AddPostPageFoodnewState createState() => _AddPostPageFoodnewState();
+/// 「Food」「Drink」共通の新規追加ベース。
+abstract class BaseAddPostPageNew extends StatefulWidget {
+  final String topDoc; // "Food" or "Drink"
+  final String collection; // ジャンル名
+
+  const BaseAddPostPageNew({
+    Key? key,
+    required this.topDoc,
+    required this.collection,
+  }) : super(key: key);
 }
 
-class _AddPostPageFoodnewState extends State<AddPostPageFoodnew> {
-  // 入力した投稿メッセージ
+/// State
+abstract class BaseAddPostPageNewState<T extends BaseAddPostPageNew>
+    extends State<T> {
   String goods = '';
   String cost = '';
   String japanese = '';
   String image = '';
   String order = '';
+
   final ValueNotifier<String> translated = ValueNotifier<String>('');
-  TextEditingController goodsController = TextEditingController();
+  final TextEditingController goodsController = TextEditingController();
+
+  Future<void> _saveData() async {
+    // 新規ドキュメントを作成
+    await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc(widget.topDoc) // Food or Drink
+        .collection(widget.collection)
+        .doc() // ドキュメントID自動生成
+        .set({
+      'goods': goods,
+      'cost': cost,
+      'ja': japanese,
+      'image': image,
+      'order': order,
+    });
+  }
+
+  /// 新規追加後の遷移先(オーバーライドで実装)
+  void onAdded();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('メニュー追加${widget.collection}'),
+        title: Text('メニュー追加 ${widget.collection}'),
       ),
       body: SingleChildScrollView(
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              TextFormField(
-                decoration: const InputDecoration(labelText: '品名(日本語)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
+              buildTextFormField(
+                label: '品名(日本語)',
+                controller: TextEditingController(),
                 maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    japanese = value;
-                  });
-                },
+                onChanged: (value) => setState(() => japanese = value),
               ),
               ElevatedButton(
-                  onPressed: () async {
-                    String japanesemenu = japanese;
-                    await translateMenu(japanesemenu, translated);
-                    goodsController.text = translated.value;
-                    goods = translated.value;
-                  },
-                  child: const Text('↑翻訳↓')),
+                onPressed: () async {
+                  await translateMenu(japanese, translated);
+                  goodsController.text = translated.value;
+                  setState(() => goods = translated.value);
+                },
+                child: const Text('↑翻訳↓'),
+              ),
               ValueListenableBuilder<String>(
-                  valueListenable: translated,
-                  builder: (context, value, child) {
-                    return TextFormField(
-                        decoration: const InputDecoration(labelText: '品名(英語)'),
-                        // 複数行のテキスト入力
-                        keyboardType: TextInputType.multiline,
-                        // 最大3行
-                        maxLines: 3,
-                        controller: goodsController,
-                        onChanged: (String value) {
-                          setState(() {
-                            goods = value;
-                          });
-                        });
-                  }),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '値段'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    cost = value;
-                  });
+                valueListenable: translated,
+                builder: (context, value, child) {
+                  return TextFormField(
+                    decoration: const InputDecoration(labelText: '品名(英語)'),
+                    keyboardType: TextInputType.multiline,
+                    maxLines: 3,
+                    controller: goodsController,
+                    onChanged: (v) => setState(() => goods = v),
+                  );
                 },
               ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '順番(辞書順)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
+              buildTextFormField(
+                label: '値段',
+                controller: TextEditingController(),
                 maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    order = value;
-                  });
-                },
+                onChanged: (value) => setState(() => cost = value),
               ),
-              const SizedBox(height: 8),
+              buildTextFormField(
+                label: '順番(辞書順)',
+                controller: TextEditingController(),
+                maxLines: 3,
+                onChanged: (value) => setState(() => order = value),
+              ),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   child: const Text('追加'),
                   onPressed: () async {
-                    // 投稿メッセージ用ドキュメント作成
-                    await FirebaseFirestore.instance
-                        .collection('Eng')
-                        .doc('Food')
-                        .collection(widget.collection)
-                        .doc() // ドキュメントID自動生成
-                        .set({
-                      'goods': goods,
-                      'cost': cost,
-                      'ja': japanese,
-                      'image': image,
-                      'order': order
-                    });
-                    // 1つ前の画面に戻る
-                    Navigator.of(context).push(MaterialPageRoute(
-                        builder: ((context) => EngPageEditState())));
+                    await _saveData();
+                    onAdded();
                   },
                 ),
               ),
-              Container(
-                height: 150,
-              )
+              const SizedBox(height: 150),
             ],
           ),
         ),
@@ -456,148 +383,90 @@ class _AddPostPageFoodnewState extends State<AddPostPageFoodnew> {
   }
 }
 
-class AddPostPageDrinknew extends StatefulWidget {
-  final String collection;
+/// Food
+class AddPostPageFoodnew extends BaseAddPostPageNew {
+  const AddPostPageFoodnew(String collection, {Key? key})
+      : super(topDoc: 'Food', collection: collection, key: key);
 
-  const AddPostPageDrinknew(this.collection, {super.key});
   @override
-  _AddPostPageDrinknewState createState() => _AddPostPageDrinknewState();
+  BaseAddPostPageNewState<AddPostPageFoodnew> createState() =>
+      _AddPostPageFoodnewState();
 }
 
-class _AddPostPageDrinknewState extends State<AddPostPageDrinknew> {
-  // 入力した投稿メッセージ
-  String goods = '';
-  String cost = '';
-  String japanese = '';
-  String image = '';
-  String order = '';
-  final ValueNotifier<String> translated = ValueNotifier<String>('');
-  TextEditingController goodsController = TextEditingController();
-
+class _AddPostPageFoodnewState
+    extends BaseAddPostPageNewState<AddPostPageFoodnew> {
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('メニュー追加${widget.collection}'),
-      ),
-      body: SingleChildScrollView(
-        child: Container(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              TextFormField(
-                decoration: const InputDecoration(labelText: '品名(日本語)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    japanese = value;
-                  });
-                },
-              ),
-              ElevatedButton(
-                  onPressed: () async {
-                    String japanesemenu = japanese;
-                    await translateMenu(japanesemenu, translated);
-                    goodsController.text = translated.value;
-                    goods = translated.value;
-                  },
-                  child: const Text('↑翻訳↓')),
-              ValueListenableBuilder<String>(
-                  valueListenable: translated,
-                  builder: (context, value, child) {
-                    return TextFormField(
-                        decoration: const InputDecoration(labelText: '品名(英語)'),
-                        // 複数行のテキスト入力
-                        keyboardType: TextInputType.multiline,
-                        // 最大3行
-                        maxLines: 3,
-                        controller: goodsController,
-                        onChanged: (String value) {
-                          setState(() {
-                            goods = value;
-                          });
-                        });
-                  }),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '値段'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    cost = value;
-                  });
-                },
-              ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '順番(辞書順)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    order = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  child: const Text('追加'),
-                  onPressed: () async {
-                    // 投稿メッセージ用ドキュメント作成
-                    await FirebaseFirestore.instance
-                        .collection('Eng')
-                        .doc('Drink')
-                        .collection(widget.collection)
-                        .doc() // ドキュメントID自動生成
-                        .set({
-                      'goods': goods,
-                      'cost': cost,
-                      'ja': japanese,
-                      'image': image,
-                      'order': order
-                    });
-                    // 1つ前の画面に戻る
-                    Navigator.of(context).push(MaterialPageRoute(
-                        builder: ((context) => EngDrinkEditPageState())));
-                  },
-                ),
-              ),
-              Container(
-                height: 150,
-              )
-            ],
-          ),
-        ),
-      ),
+  void onAdded() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => EngPageEditState()),
     );
   }
 }
+
+/// Drink
+class AddPostPageDrinknew extends BaseAddPostPageNew {
+  const AddPostPageDrinknew(String collection, {Key? key})
+      : super(topDoc: 'Drink', collection: collection, key: key);
+
+  @override
+  BaseAddPostPageNewState<AddPostPageDrinknew> createState() =>
+      _AddPostPageDrinknewState();
+}
+
+class _AddPostPageDrinknewState
+    extends BaseAddPostPageNewState<AddPostPageDrinknew> {
+  @override
+  void onAdded() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => EngDrinkEditPageState()),
+    );
+  }
+}
+
+/// ------------------------------
+/// 食べ物用ジャンル追加：AddPostPagenew
+/// ------------------------------
+/// こちらは「genre」を新規作成する特殊ケース（titles にも書き込みが必要）
 
 class AddPostPagenew extends StatefulWidget {
-  const AddPostPagenew({super.key});
+  const AddPostPagenew({Key? key}) : super(key: key);
 
   @override
   _AddPostPagenewState createState() => _AddPostPagenewState();
 }
 
 class _AddPostPagenewState extends State<AddPostPagenew> {
-  // 入力した投稿メッセージ
   String genre = '';
   String goods = '';
   String cost = '';
   String japanese = '';
   String order = '';
   final ValueNotifier<String> translated = ValueNotifier<String>('');
-  TextEditingController goodsController = TextEditingController();
+  final TextEditingController goodsController = TextEditingController();
+
+  Future<void> _saveData() async {
+    // 新規ジャンル (genre) にメニューを追加
+    await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc('Food')
+        .collection(genre)
+        .doc()
+        .set({
+      'goods': goods,
+      'cost': cost,
+      'ja': japanese,
+      'image': '',
+      'order': '0',
+    });
+
+    // titles にもジャンルを追加
+    await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc('Food')
+        .collection('titles')
+        .doc()
+        .set({'title': genre, 'order': order});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -606,117 +475,66 @@ class _AddPostPagenewState extends State<AddPostPagenew> {
         title: const Text('ジャンル追加(食べ物)'),
       ),
       body: SingleChildScrollView(
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'ジャンル名(英語)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    genre = value;
-                  });
-                },
+              buildTextFormField(
+                label: 'ジャンル名(英語)',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => genre = value),
               ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '品名(日本語)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    japanese = value;
-                  });
-                },
+              buildTextFormField(
+                label: '品名(日本語)',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => japanese = value),
               ),
               ElevatedButton(
-                  onPressed: () async {
-                    String japanesemenu = japanese;
-                    await translateMenu(japanesemenu, translated);
-                    goodsController.text = translated.value;
-                    goods = translated.value;
-                  },
-                  child: const Text('↑翻訳↓')),
+                onPressed: () async {
+                  await translateMenu(japanese, translated);
+                  goodsController.text = translated.value;
+                  setState(() => goods = translated.value);
+                },
+                child: const Text('↑翻訳↓'),
+              ),
               ValueListenableBuilder<String>(
-                  valueListenable: translated,
-                  builder: (context, value, child) {
-                    return TextFormField(
-                        decoration: const InputDecoration(labelText: '品名(英語)'),
-                        // 複数行のテキスト入力
-                        keyboardType: TextInputType.multiline,
-                        // 最大3行
-                        maxLines: 3,
-                        controller: goodsController,
-                        onChanged: (String value) {
-                          setState(() {
-                            goods = value;
-                          });
-                        });
-                  }),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '値段'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    cost = value;
-                  });
+                valueListenable: translated,
+                builder: (context, value, child) {
+                  return TextFormField(
+                    decoration: const InputDecoration(labelText: '品名(英語)'),
+                    keyboardType: TextInputType.multiline,
+                    maxLines: 3,
+                    controller: goodsController,
+                    onChanged: (v) => setState(() => goods = v),
+                  );
                 },
               ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '順番(数字)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    order = value;
-                  });
-                },
+              buildTextFormField(
+                label: '値段',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => cost = value),
               ),
-              const SizedBox(height: 8),
+              buildTextFormField(
+                label: '順番(数字)',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => order = value),
+              ),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   child: const Text('追加'),
                   onPressed: () async {
-                    // 投稿メッセージ用ドキュメント作成
-                    await FirebaseFirestore.instance
-                        .collection('Eng')
-                        .doc('Food')
-                        .collection(genre)
-                        .doc() // ドキュメントID自動生成
-                        .set({
-                      'goods': goods,
-                      'cost': cost,
-                      'ja': japanese,
-                      'image': '',
-                      'order': '0'
-                    });
-                    await FirebaseFirestore.instance
-                        .collection('Eng')
-                        .doc('Food')
-                        .collection('titles')
-                        .doc() // ドキュメントID自動生成
-                        .set({'title': genre, 'order': order});
-                    // 1つ前の画面に戻る
-                    Navigator.of(context).push(MaterialPageRoute(
-                        builder: ((context) => EngPageEditState())));
+                    await _saveData();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (context) => EngPageEditState()),
+                    );
                   },
                 ),
               ),
-              Container(
-                height: 150,
-              )
+              const SizedBox(height: 150),
             ],
           ),
         ),
@@ -725,22 +543,47 @@ class _AddPostPagenewState extends State<AddPostPagenew> {
   }
 }
 
+/// ------------------------------
+/// 飲み物用ジャンル追加：AddPostPagenewDrink
+/// ------------------------------
 class AddPostPagenewDrink extends StatefulWidget {
-  const AddPostPagenewDrink({super.key});
+  const AddPostPagenewDrink({Key? key}) : super(key: key);
 
   @override
   _AddPostPagenewDrinkState createState() => _AddPostPagenewDrinkState();
 }
 
 class _AddPostPagenewDrinkState extends State<AddPostPagenewDrink> {
-  // 入力した投稿メッセージ
   String genre = '';
   String goods = '';
   String cost = '';
   String japanese = '';
   String order = '';
   final ValueNotifier<String> translated = ValueNotifier<String>('');
-  TextEditingController goodsController = TextEditingController();
+  final TextEditingController goodsController = TextEditingController();
+
+  Future<void> _saveData() async {
+    // 新規ジャンル (genre) にメニューを追加
+    await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc('Drink')
+        .collection(genre)
+        .doc()
+        .set({
+      'goods': goods,
+      'cost': cost,
+      'ja': japanese,
+      'image': '',
+      'order': '0',
+    });
+    // titles にジャンル追加
+    await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc('Drink')
+        .collection('titles')
+        .doc()
+        .set({'title': genre, 'order': order});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -749,117 +592,64 @@ class _AddPostPagenewDrinkState extends State<AddPostPagenewDrink> {
         title: const Text('ジャンル追加(飲み物)'),
       ),
       body: SingleChildScrollView(
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'ジャンル名(英語)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    genre = value;
-                  });
-                },
+              buildTextFormField(
+                label: 'ジャンル名(英語)',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => genre = value),
               ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '品名(日本語)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    japanese = value;
-                  });
-                },
+              buildTextFormField(
+                label: '品名(日本語)',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => japanese = value),
               ),
               ElevatedButton(
-                  onPressed: () async {
-                    String japanesemenu = japanese;
-                    await translateMenu(japanesemenu, translated);
-                    goodsController.text = translated.value;
-                    goods = translated.value;
-                  },
-                  child: const Text('↑翻訳↓')),
+                onPressed: () async {
+                  await translateMenu(japanese, translated);
+                  goodsController.text = translated.value;
+                  setState(() => goods = translated.value);
+                },
+                child: const Text('↑翻訳↓'),
+              ),
               ValueListenableBuilder<String>(
-                  valueListenable: translated,
-                  builder: (context, value, child) {
-                    return TextFormField(
-                        decoration: const InputDecoration(labelText: '品名(英語)'),
-                        // 複数行のテキスト入力
-                        keyboardType: TextInputType.multiline,
-                        // 最大3行
-                        maxLines: 3,
-                        controller: goodsController,
-                        onChanged: (String value) {
-                          setState(() {
-                            goods = value;
-                          });
-                        });
-                  }),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '値段'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    cost = value;
-                  });
+                valueListenable: translated,
+                builder: (context, value, child) {
+                  return TextFormField(
+                    decoration: const InputDecoration(labelText: '品名(英語)'),
+                    maxLines: 3,
+                    controller: goodsController,
+                    onChanged: (v) => setState(() => goods = v),
+                  );
                 },
               ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '順番(数字)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    order = value;
-                  });
-                },
+              buildTextFormField(
+                label: '値段',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => cost = value),
               ),
-              const SizedBox(height: 8),
+              buildTextFormField(
+                label: '順番(数字)',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => order = value),
+              ),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   child: const Text('追加'),
                   onPressed: () async {
-                    // 投稿メッセージ用ドキュメント作成
-                    await FirebaseFirestore.instance
-                        .collection('Eng')
-                        .doc('Drink')
-                        .collection(genre)
-                        .doc() // ドキュメントID自動生成
-                        .set({
-                      'goods': goods,
-                      'cost': cost,
-                      'ja': japanese,
-                      'image': '',
-                      'order': '0'
-                    });
-                    await FirebaseFirestore.instance
-                        .collection('Eng')
-                        .doc('Drink')
-                        .collection('titles')
-                        .doc() // ドキュメントID自動生成
-                        .set({'title': genre, 'order': order});
-                    // 1つ前の画面に戻る
-                    Navigator.of(context).push(MaterialPageRoute(
-                        builder: ((context) => EngDrinkEditPageState())));
+                    await _saveData();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (context) => EngDrinkEditPageState()),
+                    );
                   },
                 ),
               ),
-              Container(
-                height: 150,
-              )
+              const SizedBox(height: 150),
             ],
           ),
         ),
@@ -868,30 +658,28 @@ class _AddPostPagenewDrinkState extends State<AddPostPagenewDrink> {
   }
 }
 
+/// ------------------------------
+/// コース編集：AddPostPageCourse
+/// ------------------------------
 class AddPostPageCourse extends StatefulWidget {
   final String docid;
   final String name;
 
-  const AddPostPageCourse(this.docid, this.name, {super.key});
+  const AddPostPageCourse(this.docid, this.name, {Key? key}) : super(key: key);
 
   @override
   _AddPostPageCourseState createState() => _AddPostPageCourseState();
 }
 
 class _AddPostPageCourseState extends State<AddPostPageCourse> {
-  // 入力した投稿メッセージ
-  String goods = '';
-  String cost = '';
-  String japanese = '';
-  final goodsController = TextEditingController();
-  final costController = TextEditingController();
-  final japaneseController = TextEditingController();
+  final goodsController = TextEditingController(); // title(役割)
+  final costController = TextEditingController(); // discription(英語表記)
+  final japaneseController = TextEditingController(); // 日本語
   final orderController = TextEditingController();
   final ValueNotifier<String> translated = ValueNotifier<String>('');
 
   @override
   void dispose() {
-    // コントローラを破棄
     goodsController.dispose();
     costController.dispose();
     japaneseController.dispose();
@@ -899,19 +687,44 @@ class _AddPostPageCourseState extends State<AddPostPageCourse> {
     super.dispose();
   }
 
+  Future<void> _loadData() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc('Course')
+        .collection(widget.name)
+        .doc(widget.docid)
+        .get();
+    if (snap.exists) {
+      final data = snap.data() as Map<String, dynamic>;
+      goodsController.text = data['title'] ?? '';
+      costController.text = data['discription'] ?? '';
+      japaneseController.text = data['ja'] ?? '';
+      orderController.text = data['order'] ?? '';
+    }
+  }
+
+  Future<void> _updateDatabase() async {
+    await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc('Course')
+        .collection(widget.name)
+        .doc(widget.docid)
+        .update({
+      'title': goodsController.text,
+      'discription': costController.text,
+      'ja': japaneseController.text,
+      'order': orderController.text,
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('メニュー編集'),
       ),
-      body: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('Eng')
-            .doc('Course')
-            .collection(widget.name)
-            .doc(widget.docid)
-            .get(),
+      body: FutureBuilder(
+        future: _loadData(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -919,69 +732,75 @@ class _AddPostPageCourseState extends State<AddPostPageCourse> {
           if (snapshot.hasError) {
             return const Center(child: Text("エラーが発生しました"));
           }
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text("データが存在しません"));
-          }
-
-          if (snapshot.connectionState == ConnectionState.done) {
-            Map<String, dynamic> data =
-                snapshot.data!.data() as Map<String, dynamic>;
-            goodsController.text = data['title'] ?? '';
-            costController.text = data['discription'] ?? '';
-            japaneseController.text = data['ja'] ?? '';
-            orderController.text = data['order'] ?? '';
-          }
 
           return SingleChildScrollView(
-            child: Container(
+            child: Padding(
               padding: const EdgeInsets.all(32),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  buildTextFormField('役割（例:main)', goodsController),
-                  buildTextFormField('品名(日本語)', japaneseController),
+                  buildTextFormField(
+                    label: '役割 (例: main)',
+                    controller: goodsController,
+                  ),
+                  buildTextFormField(
+                    label: '品名(日本語)',
+                    controller: japaneseController,
+                  ),
                   ElevatedButton(
-                      onPressed: () async {
-                        String japanesemenu = japaneseController.text;
-                        await translateMenu(japanesemenu, translated);
-                        costController.text = translated.value;
-                      },
-                      child: const Text('↑翻訳↓')),
+                    onPressed: () async {
+                      await translateMenu(japaneseController.text, translated);
+                      costController.text = translated.value;
+                    },
+                    child: const Text('↑翻訳↓'),
+                  ),
                   ValueListenableBuilder<String>(
-                      valueListenable: translated,
-                      builder: (context, value, child) {
-                        return buildTextFormField('品名(英語)', costController);
-                      }),
-                  buildTextFormField('順番', orderController),
-                  const SizedBox(height: 8),
+                    valueListenable: translated,
+                    builder: (context, value, child) {
+                      return buildTextFormField(
+                        label: '品名(英語)',
+                        controller: costController,
+                      );
+                    },
+                  ),
+                  buildTextFormField(
+                    label: '順番',
+                    controller: orderController,
+                  ),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
                       ElevatedButton(
-                          onPressed: () async {
-                            await updateDatabase(widget.name, widget.docid);
-                            Navigator.of(context).push(MaterialPageRoute(
-                                builder: ((context) =>
-                                    EngCoursePageEditState())));
-                          },
-                          child: const Text("続けて編集")),
+                        onPressed: () async {
+                          await _updateDatabase();
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => EngCoursePageEditState(),
+                            ),
+                          );
+                        },
+                        child: const Text("続けて編集"),
+                      ),
+                      const SizedBox(width: 8),
                       ElevatedButton(
-                          onPressed: () async {
-                            await updateDatabase(widget.name, widget.docid);
-                            Navigator.of(context).push(MaterialPageRoute(
-                                builder: ((context) => EngPageState())));
-                          },
-                          child: const Text("ホームに戻る")),
+                        onPressed: () async {
+                          await _updateDatabase();
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => EngPageState(),
+                            ),
+                          );
+                        },
+                        child: const Text("ホームに戻る"),
+                      ),
+                      const SizedBox(width: 8),
                       ElevatedButton(
-                          onPressed: () async {
-                            Navigator.of(context).pop();
-                          },
-                          child: const Text("キャンセル"))
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text("キャンセル"),
+                      ),
                     ],
                   ),
-                  Container(
-                    height: 150,
-                  )
+                  const SizedBox(height: 150),
                 ],
               ),
             ),
@@ -990,45 +809,24 @@ class _AddPostPageCourseState extends State<AddPostPageCourse> {
       ),
     );
   }
-
-  Widget buildTextFormField(String label, TextEditingController controller) {
-    return TextFormField(
-      decoration: InputDecoration(labelText: label),
-      keyboardType: TextInputType.multiline,
-      controller: controller,
-      maxLines: 3,
-    );
-  }
-
-  Future<void> updateDatabase(String collection, String docid) async {
-    await FirebaseFirestore.instance
-        .collection('Eng')
-        .doc('Course')
-        .collection(collection)
-        .doc(docid)
-        .update({
-      'title': goodsController.text,
-      'discription': costController.text,
-      'ja': japaneseController.text,
-      'order': orderController.text
-    });
-  }
 }
 
+/// ------------------------------
+/// ジャンルの順番編集用：TitleEditPage
+/// ------------------------------
 class TitleEditPage extends StatefulWidget {
   final String docid;
   final String name;
-  final String genre;
+  final String genre; // "Food" or "Drink" or "Course"
 
-  const TitleEditPage(this.docid, this.name, this.genre, {super.key});
+  const TitleEditPage(this.docid, this.name, this.genre, {Key? key})
+      : super(key: key);
 
   @override
   TitleEditPageState createState() => TitleEditPageState();
 }
 
 class TitleEditPageState extends State<TitleEditPage> {
-  // 入力した投稿メッセージ
-  String name = '';
   final orderController = TextEditingController();
 
   @override
@@ -1037,19 +835,36 @@ class TitleEditPageState extends State<TitleEditPage> {
     super.dispose();
   }
 
+  Future<void> _loadData() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc(widget.genre)
+        .collection('titles')
+        .doc(widget.docid)
+        .get();
+    if (snap.exists) {
+      final data = snap.data() as Map<String, dynamic>;
+      orderController.text = data['order'] ?? '';
+    }
+  }
+
+  Future<void> _updateDatabase() async {
+    await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc(widget.genre)
+        .collection('titles')
+        .doc(widget.docid)
+        .update({'order': orderController.text});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('メニュー編集'),
       ),
-      body: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('Eng')
-            .doc(widget.genre)
-            .collection('titles')
-            .doc(widget.docid)
-            .get(),
+      body: FutureBuilder(
+        future: _loadData(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -1057,63 +872,66 @@ class TitleEditPageState extends State<TitleEditPage> {
           if (snapshot.hasError) {
             return const Center(child: Text("エラーが発生しました"));
           }
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text("データが存在しません"));
-          }
-
-          if (snapshot.connectionState == ConnectionState.done) {
-            Map<String, dynamic> data =
-                snapshot.data!.data() as Map<String, dynamic>;
-            orderController.text = data['order'] ?? '';
-          }
 
           return SingleChildScrollView(
-            child: Container(
+            child: Padding(
               padding: const EdgeInsets.all(32),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  buildTextFormField('順番', orderController),
-                  const SizedBox(height: 8),
+                  buildTextFormField(
+                    label: '順番',
+                    controller: orderController,
+                  ),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
                       ElevatedButton(
-                          onPressed: () async {
-                            await updateDatabase(
-                                widget.name, widget.docid, widget.genre);
-                            if (widget.genre == 'Food') {
-                              Navigator.of(context).push(MaterialPageRoute(
-                                  builder: ((context) => EngPageEditState())));
-                            } else if (widget.genre == 'Drink') {
-                              Navigator.of(context).push(MaterialPageRoute(
-                                  builder: ((context) =>
-                                      EngDrinkEditPageState())));
-                            } else if (widget.genre == 'Course') {
-                              Navigator.of(context).push(MaterialPageRoute(
-                                  builder: ((context) =>
-                                      EngCoursePageEditState())));
-                            }
-                          },
-                          child: const Text("続けて編集")),
+                        onPressed: () async {
+                          await _updateDatabase();
+                          if (widget.genre == 'Food') {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => EngPageEditState(),
+                              ),
+                            );
+                          } else if (widget.genre == 'Drink') {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => EngDrinkEditPageState(),
+                              ),
+                            );
+                          } else {
+                            // コース
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => EngCoursePageEditState(),
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text("続けて編集"),
+                      ),
+                      const SizedBox(width: 8),
                       ElevatedButton(
-                          onPressed: () async {
-                            await updateDatabase(
-                                widget.name, widget.docid, widget.genre);
-                            Navigator.of(context).push(MaterialPageRoute(
-                                builder: ((context) => EngPageState())));
-                          },
-                          child: const Text("ホームに戻る")),
+                        onPressed: () async {
+                          await _updateDatabase();
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => EngPageState(),
+                            ),
+                          );
+                        },
+                        child: const Text("ホームに戻る"),
+                      ),
+                      const SizedBox(width: 8),
                       ElevatedButton(
-                          onPressed: () async {
-                            Navigator.of(context).pop();
-                          },
-                          child: const Text("キャンセル"))
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text("キャンセル"),
+                      ),
                     ],
                   ),
-                  Container(
-                    height: 150,
-                  )
+                  const SizedBox(height: 150),
                 ],
               ),
             ),
@@ -1122,145 +940,105 @@ class TitleEditPageState extends State<TitleEditPage> {
       ),
     );
   }
-
-  Widget buildTextFormField(String label, TextEditingController controller) {
-    return TextFormField(
-      decoration: InputDecoration(labelText: label),
-      keyboardType: TextInputType.multiline,
-      controller: controller,
-      maxLines: 3,
-    );
-  }
-
-  Future<void> updateDatabase(
-      String collection, String docid, String genre) async {
-    await FirebaseFirestore.instance
-        .collection('Eng')
-        .doc(genre)
-        .collection('titles')
-        .doc(docid)
-        .update({'order': orderController.text});
-  }
 }
 
-class AddPostPagenewCourse extends StatefulWidget {
-  final String name;
+/// ------------------------------
+/// コースの新規追加
+/// ------------------------------
 
-  const AddPostPagenewCourse(this.name, {super.key});
+class AddPostPagenewCourse extends StatefulWidget {
+  final String name; // 追加先のコース名
+
+  const AddPostPagenewCourse(this.name, {Key? key}) : super(key: key);
+
   @override
   _AddPostPagenewCourseState createState() => _AddPostPagenewCourseState();
 }
 
 class _AddPostPagenewCourseState extends State<AddPostPagenewCourse> {
-  // 入力した投稿メッセージ
   String genre = '';
   String goods = '';
-  String cost = '';
   String japanese = '';
   String order = '';
   final ValueNotifier<String> translated = ValueNotifier<String>('');
-  TextEditingController goodsController = TextEditingController();
+  final TextEditingController goodsController = TextEditingController();
+
+  Future<void> _saveData() async {
+    await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc('Course')
+        .collection(widget.name)
+        .doc()
+        .set({
+      'title': genre,
+      'discription': goods,
+      'ja': japanese,
+      'image': '',
+      'order': order,
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('コースメニュー追加'),
+        title: Text('コースメニュー追加 (${widget.name})'),
       ),
       body: SingleChildScrollView(
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              TextFormField(
-                decoration: const InputDecoration(labelText: '役割(例:main)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    genre = value;
-                  });
-                },
+              buildTextFormField(
+                label: '役割(例: main)',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => genre = value),
               ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '名前(日本語)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    japanese = value;
-                  });
-                },
+              buildTextFormField(
+                label: '名前(日本語)',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => japanese = value),
               ),
               ElevatedButton(
-                  onPressed: () async {
-                    String japanesemenu = japanese;
-                    await translateMenu(japanesemenu, translated);
-                    goodsController.text = translated.value;
-                    goods = translated.value;
-                  },
-                  child: const Text('↑翻訳↓')),
+                onPressed: () async {
+                  await translateMenu(japanese, translated);
+                  goodsController.text = translated.value;
+                  setState(() => goods = translated.value);
+                },
+                child: const Text('↑翻訳↓'),
+              ),
               ValueListenableBuilder<String>(
-                  valueListenable: translated,
-                  builder: (context, value, child) {
-                    return TextFormField(
-                        decoration: const InputDecoration(labelText: '品名(英語)'),
-                        // 複数行のテキスト入力
-                        keyboardType: TextInputType.multiline,
-                        // 最大3行
-                        maxLines: 3,
-                        controller: goodsController,
-                        onChanged: (String value) {
-                          setState(() {
-                            goods = value;
-                          });
-                        });
-                  }),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '順番'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    order = value;
-                  });
+                valueListenable: translated,
+                builder: (context, value, child) {
+                  return TextFormField(
+                    decoration: const InputDecoration(labelText: '品名(英語)'),
+                    keyboardType: TextInputType.multiline,
+                    maxLines: 3,
+                    controller: goodsController,
+                    onChanged: (v) => setState(() => goods = v),
+                  );
                 },
               ),
-              const SizedBox(height: 8),
+              buildTextFormField(
+                label: '順番',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => order = value),
+              ),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   child: const Text('追加'),
                   onPressed: () async {
-                    // 投稿メッセージ用ドキュメント作成
-                    await FirebaseFirestore.instance
-                        .collection('Eng')
-                        .doc('Course')
-                        .collection(widget.name)
-                        .doc() // ドキュメントID自動生成
-                        .set({
-                      'title': genre,
-                      'discription': goods,
-                      'ja': japanese,
-                      'image': '',
-                      'order': order
-                    });
-                    // 1つ前の画面に戻る
-                    Navigator.of(context).push(MaterialPageRoute(
-                        builder: ((context) => EngCoursePageEditState())));
+                    await _saveData();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (context) => EngCoursePageEditState()),
+                    );
                   },
                 ),
               ),
-              Container(
-                height: 150,
-              )
+              const SizedBox(height: 150),
             ],
           ),
         ),
@@ -1269,22 +1047,48 @@ class _AddPostPagenewCourseState extends State<AddPostPagenewCourse> {
   }
 }
 
+/// ------------------------------
+/// コース自体の新規追加
+/// ------------------------------
 class AddPostnewCourse extends StatefulWidget {
-  const AddPostnewCourse({super.key});
+  const AddPostnewCourse({Key? key}) : super(key: key);
 
   @override
   _AddPostnewCourseState createState() => _AddPostnewCourseState();
 }
 
 class _AddPostnewCourseState extends State<AddPostnewCourse> {
-  // 入力した投稿メッセージ
+  String coursename = '';
   String genre = '';
   String goods = '';
-  String coursename = '';
   String japanese = '';
   String order = '';
   final ValueNotifier<String> translated = ValueNotifier<String>('');
-  TextEditingController goodsController = TextEditingController();
+  final TextEditingController goodsController = TextEditingController();
+
+  Future<void> _saveData() async {
+    // 新しいコース名のサブコレクションを作成し、1件目のドキュメントを追加
+    await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc('Course')
+        .collection(coursename)
+        .doc()
+        .set({
+      'title': genre,
+      'discription': goods,
+      'ja': japanese,
+      'image': '',
+      'order': order,
+    });
+
+    // コースのタイトルリストにも追加
+    await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc('Course')
+        .collection('titles')
+        .doc()
+        .set({'title': coursename, 'order': order});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1293,117 +1097,65 @@ class _AddPostnewCourseState extends State<AddPostnewCourse> {
         title: const Text('コース追加'),
       ),
       body: SingleChildScrollView(
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'コース名(英語)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    coursename = value;
-                  });
-                },
+              buildTextFormField(
+                label: 'コース名(英語)',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => coursename = value),
               ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '役割(例:main)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    genre = value;
-                  });
-                },
+              buildTextFormField(
+                label: '役割(例: main)',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => genre = value),
               ),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '名前(日本語)'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    japanese = value;
-                  });
-                },
+              buildTextFormField(
+                label: '名前(日本語)',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => japanese = value),
               ),
               ElevatedButton(
-                  onPressed: () async {
-                    String japanesemenu = japanese;
-                    await translateMenu(japanesemenu, translated);
-                    goodsController.text = translated.value;
-                    goods = translated.value;
-                  },
-                  child: const Text('↑翻訳↓')),
+                onPressed: () async {
+                  await translateMenu(japanese, translated);
+                  goodsController.text = translated.value;
+                  setState(() => goods = translated.value);
+                },
+                child: const Text('↑翻訳↓'),
+              ),
               ValueListenableBuilder<String>(
-                  valueListenable: translated,
-                  builder: (context, value, child) {
-                    return TextFormField(
-                        decoration: const InputDecoration(labelText: '品名(英語)'),
-                        // 複数行のテキスト入力
-                        keyboardType: TextInputType.multiline,
-                        // 最大3行
-                        maxLines: 3,
-                        controller: goodsController,
-                        onChanged: (String value) {
-                          setState(() {
-                            goods = value;
-                          });
-                        });
-                  }),
-              TextFormField(
-                decoration: const InputDecoration(labelText: '順番'),
-                // 複数行のテキスト入力
-                keyboardType: TextInputType.multiline,
-                // 最大3行
-                maxLines: 3,
-                onChanged: (String value) {
-                  setState(() {
-                    order = value;
-                  });
+                valueListenable: translated,
+                builder: (context, value, child) {
+                  return TextFormField(
+                    decoration: const InputDecoration(labelText: '品名(英語)'),
+                    keyboardType: TextInputType.multiline,
+                    maxLines: 3,
+                    controller: goodsController,
+                    onChanged: (v) => setState(() => goods = v),
+                  );
                 },
               ),
-              const SizedBox(height: 8),
+              buildTextFormField(
+                label: '順番',
+                controller: TextEditingController(),
+                onChanged: (value) => setState(() => order = value),
+              ),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   child: const Text('追加'),
                   onPressed: () async {
-                    // 投稿メッセージ用ドキュメント作成
-                    await FirebaseFirestore.instance
-                        .collection('Eng')
-                        .doc('Course')
-                        .collection(coursename)
-                        .doc() // ドキュメントID自動生成
-                        .set({
-                      'title': genre,
-                      'discription': goods,
-                      'ja': japanese,
-                      'image': '',
-                      'order': order
-                    });
-                    await FirebaseFirestore.instance
-                        .collection('Eng')
-                        .doc('Course')
-                        .collection('titles')
-                        .doc() // ドキュメントID自動生成
-                        .set({'title': coursename, 'order': order});
-                    // 1つ前の画面に戻る
-                    Navigator.of(context).push(MaterialPageRoute(
-                        builder: ((context) => EngCoursePageEditState())));
+                    await _saveData();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (context) => EngCoursePageEditState()),
+                    );
                   },
                 ),
               ),
-              Container(
-                height: 150,
-              )
+              const SizedBox(height: 150),
             ],
           ),
         ),
@@ -1412,8 +1164,11 @@ class _AddPostnewCourseState extends State<AddPostnewCourse> {
   }
 }
 
+/// ------------------------------
+/// パスワードページ
+/// ------------------------------
 class Password extends StatefulWidget {
-  const Password({super.key});
+  const Password({Key? key}) : super(key: key);
 
   @override
   _PasswordState createState() => _PasswordState();
@@ -1455,7 +1210,8 @@ class _PasswordState extends State<Password> {
                   if (password == configurations.password) {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                          builder: (context) => EngPageEditState()),
+                        builder: (context) => EngPageEditState(),
+                      ),
                     );
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(

@@ -1,355 +1,461 @@
-import 'package:flutter/material.dart';
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:image_picker_web/image_picker_web.dart';
+
 import 'Edit.dart';
 import 'foodEdit.dart';
 import 'drink.dart';
-import 'package:image_picker_web/image_picker_web.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:typed_data';
 import 'courseEdit.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 class EngDrinkEditPageState extends StatefulWidget {
-  EngDrinkEditPage createState() => EngDrinkEditPage();
+  const EngDrinkEditPageState({Key? key}) : super(key: key);
+
+  @override
+  _EngDrinkEditPageState createState() => _EngDrinkEditPageState();
 }
 
-class EngDrinkEditPage extends State<EngDrinkEditPageState> {
-  List<String> favorite = [];
-  Color mycolor = Colors.lightGreen;
+class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
+  Color _selectedColor = Colors.lightGreen;
 
-  void _showPicker(BuildContext context, String docid) {
-    showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text('Pick a color!'),
-            content: SingleChildScrollView(
-              child: ColorPicker(
-                pickerColor: mycolor, //default color
-                onColorChanged: (Color color) {
-                  //on color picked
-                  setState(() {
-                    mycolor = color;
-                  });
-                },
-              ),
-            ),
-            actions: <Widget>[
-              ElevatedButton(
-                child: const Text('DONE'),
-                onPressed: () {
-                  updateDatabase(docid, mycolor.value);
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: ((context) =>
-                          EngDrinkEditPageState()))); //dismiss the color picker
-                },
-              ),
-            ],
-          );
-        });
-  }
-
-  Future<void> updateDatabase(String docid, int color) async {
-    await FirebaseFirestore.instance
-        .collection('Eng')
-        .doc('Drink')
-        .collection('color')
-        .doc(docid)
-        .update({'color': color});
-  }
-
+  @override
   Widget build(BuildContext context) {
-    final Size size = MediaQuery.of(context).size;
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
-        title: Text('編集用ページ（店舗用）'),
+        title: const Text('編集用ページ（店舗用）'),
       ),
       body: SingleChildScrollView(
-        physics: NeverScrollableScrollPhysics(),
+        physics: const NeverScrollableScrollPhysics(),
         child: Column(
           children: [
-            spacer(5),
-            menuButtons(),
-            sectionTitlenew(),
-            spacer(5),
-            menulist(size),
+            _spacer(5),
+            _buildMenuButtons(),
+            _buildNewSectionTitle(),
+            _spacer(5),
+            _buildMenuList(size),
           ],
         ),
       ),
     );
   }
 
-  Widget menulist(size) => FutureBuilder<QuerySnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('Eng')
-            .doc('Drink')
-            .collection("titles")
-            .orderBy('order')
-            .get(),
-        builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            final titles = snapshot.data!.docs;
-            return Container(
-              width: double.infinity,
-              height: size.height - 160,
-              child: ListView.builder(
-                cacheExtent: 250.0 * titles.length - 1,
-                physics: AlwaysScrollableScrollPhysics(),
-                itemCount: titles.length,
-                itemBuilder: (context, index) {
-                  return menuSection(titles[index]);
-                },
-              ),
+  /// カラーピッカー用ダイアログを表示
+  void _showColorPickerDialog(BuildContext context, String docId) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Pick a color!'),
+          content: SingleChildScrollView(
+            child: ColorPicker(
+              pickerColor: _selectedColor, // デフォルト色
+              onColorChanged: (Color color) {
+                setState(() {
+                  _selectedColor = color;
+                });
+              },
+            ),
+          ),
+          actions: <Widget>[
+            ElevatedButton(
+              child: const Text('DONE'),
+              onPressed: () async {
+                await _updateDatabase(docId, _selectedColor.value);
+                // ダイアログを閉じてリロード
+                if (mounted) {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                        builder: (_) => const EngDrinkEditPageState()),
+                  );
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Firestoreにテーマカラーを更新
+  Future<void> _updateDatabase(String docId, int colorValue) async {
+    await FirebaseFirestore.instance
+        .collection('Eng')
+        .doc('Drink')
+        .collection('color')
+        .doc(docId)
+        .update({'color': colorValue});
+  }
+
+  /// 上部メニュー操作ボタン
+  Widget _buildMenuButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _buildMenuButton(
+          label: 'Food編集',
+          onPressed: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const EngPageEditState()),
             );
-          }
-          return Center(child: Text('読込中...'));
-        },
-      );
+          },
+        ),
+        const SizedBox(width: 15),
+        _buildMenuButton(
+          label: '編集終了',
+          onPressed: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const EngDrinkPageState()),
+            );
+          },
+        ),
+        const SizedBox(width: 15),
+        _buildMenuButton(
+          label: 'コース編集',
+          onPressed: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const EngCoursePageEditState()),
+            );
+          },
+        ),
+      ],
+    );
+  }
 
-  Widget spacer(double height) => Container(padding: EdgeInsets.all(height));
-
-  Widget noticeText(String text, Color color) =>
-      Text(text, style: TextStyle(color: color));
-
-  Widget menuButtons() => Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          InkWell(
-            onTap: () async {
-              await Navigator.of(context).push(MaterialPageRoute(
-                  builder: ((context) => EngPageEditState())));
-            },
-            child: menuButton('Food編集'),
-          ),
-          Container(width: 15, height: 50),
-          InkWell(
-            onTap: () async {
-              await Navigator.of(context).push(MaterialPageRoute(
-                  builder: ((context) => EngDrinkPageState())));
-            },
-            child: menuButton('編集終了'),
-          ),
-          Container(width: 15, height: 50),
-          InkWell(
-            onTap: () async {
-              await Navigator.of(context).push(MaterialPageRoute(
-                  builder: ((context) => EngCoursePageEditState())));
-            },
-            child: menuButton('コース編集'),
-          ),
-        ],
-      );
-
-  Widget menuButton(String text) => Container(
+  Widget _buildMenuButton(
+      {required String label, required VoidCallback onPressed}) {
+    return InkWell(
+      onTap: onPressed,
+      child: Container(
         alignment: Alignment.center,
         width: 100,
         height: 50,
-        child: Text(text, style: TextStyle(color: Colors.white, fontSize: 16)),
         decoration: BoxDecoration(
-            color: Color.fromARGB(255, 53, 52, 52),
-            borderRadius: BorderRadius.all(Radius.circular(20))),
-      );
+          color: const Color.fromARGB(255, 53, 52, 52),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+        ),
+      ),
+    );
+  }
 
-  Widget menuSection(DocumentSnapshot titles) => FutureBuilder<QuerySnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('Eng')
-            .doc('Drink')
-            .collection(titles['title'])
-            .orderBy('order')
-            .get(),
-        builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            final documents = snapshot.data!.docs;
-            return Column(
-              children: [
-                sectionTitle(titles),
-                sectionContent(documents, titles['title']),
-                spacer(30)
-              ],
-            );
-          }
-          return Center(child: Text('読込中...'));
-        },
-      );
+  /// 新しいジャンル追加やテーマ変更用のタイトル領域
+  Widget _buildNewSectionTitle() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        alignment: Alignment.centerLeft,
+        width: double.infinity,
+        height: 30,
+        decoration: const BoxDecoration(
+          color: Colors.lightGreen,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            bottomLeft: Radius.circular(20),
+          ),
+        ),
+        child: Row(
+          children: [
+            ElevatedButton(
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const AddPostPagenewDrink()),
+                );
+              },
+              child: const Text('ジャンル追加'),
+            ),
+            const SizedBox(width: 10),
+            ElevatedButton(
+              onPressed: () {
+                _showColorPickerDialog(context, 'uFqxIrQ9JPpUjqxVn7iY');
+              },
+              child: const Text('テーマ変更'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-  Widget sectionTitle(DocumentSnapshot title) => Align(
+  /// ジャンル（titles）の一覧を表示
+  Widget _buildMenuList(Size size) {
+    return FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('Eng')
+          .doc('Drink')
+          .collection("titles")
+          .orderBy('order')
+          .get(),
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          final titleDocs = snapshot.data!.docs;
+          return SizedBox(
+            width: double.infinity,
+            height: size.height - 160,
+            child: ListView.builder(
+              cacheExtent: 250.0 * titleDocs.length - 1,
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: titleDocs.length,
+              itemBuilder: (context, index) {
+                return _buildMenuSection(titleDocs[index]);
+              },
+            ),
+          );
+        }
+        return const Center(child: Text('読込中...'));
+      },
+    );
+  }
+
+  /// 各ジャンル（titles）のセクション
+  Widget _buildMenuSection(DocumentSnapshot titleDoc) {
+    final titleName = titleDoc['title'] as String;
+    return FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('Eng')
+          .doc('Drink')
+          .collection(titleName)
+          .orderBy('order')
+          .get(),
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          final itemDocs = snapshot.data!.docs;
+          return Column(
+            children: [
+              _buildSectionTitle(titleDoc),
+              _buildSectionContent(itemDocs, titleName),
+              _spacer(30),
+            ],
+          );
+        }
+        return const Center(child: Text('読込中...'));
+      },
+    );
+  }
+
+  /// ジャンルのタイトル部分
+  Widget _buildSectionTitle(DocumentSnapshot titleDoc) {
+    final titleName = titleDoc['title'] as String;
+
+    return Align(
       alignment: Alignment.centerLeft,
       child: InkWell(
-          onTap: () {
-            Navigator.of(context).push(MaterialPageRoute(
-                builder: ((context) =>
-                    TitleEditPage(title.id, title['title'], 'Drink'))));
-          },
-          child: FutureBuilder<QuerySnapshot>(
-              future: FirebaseFirestore.instance
-                  .collection('Eng')
-                  .doc('Drink')
-                  .collection('color')
-                  .get(),
-              builder: (context, snapshot) {
-                if (snapshot.hasData) {
-                  final documents = snapshot.data!.docs;
-                  final color = documents[0]['color'];
-                  return Container(
-                    alignment: Alignment.centerLeft,
-                    decoration: BoxDecoration(
-                        color: Color(color),
-                        borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(20),
-                            bottomLeft: Radius.circular(20))),
-                    width: double.infinity,
-                    height: 30,
-                    child: Row(children: [
-                      Text('   ${title['title']}',
-                          style: TextStyle(
-                              fontSize: 20,
-                              fontStyle: FontStyle.italic,
-                              color: Colors.white)),
-                      SizedBox(width: 10),
-                      ElevatedButton(
-                          onPressed: () async {
-                            await Navigator.of(context).push(MaterialPageRoute(
-                                builder: ((context) =>
-                                    AddPostPageDrinknew(title['title']))));
-                          },
-                          child: Text('メニュー追加'))
-                    ]),
-                  );
-                }
-                return Container();
-              })));
-
-  Widget sectionTitlenew() => Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          alignment: Alignment.centerLeft,
-          decoration: BoxDecoration(
-              color: Colors.lightGreen,
-              borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  bottomLeft: Radius.circular(20))),
-          width: double.infinity,
-          height: 30,
-          child: Row(children: [
-            ElevatedButton(
-                onPressed: () async {
-                  await Navigator.of(context).push(MaterialPageRoute(
-                      builder: ((context) => AddPostPagenewDrink())));
-                },
-                child: Text('ジャンル追加')),
-            SizedBox(width: 10),
-            ElevatedButton(
-                onPressed: () {
-                  _showPicker(context, 'uFqxIrQ9JPpUjqxVn7iY');
-                },
-                child: Text('テーマ変更')),
-          ]),
-        ),
-      );
-
-  Widget sectionContent(List<DocumentSnapshot> documents, String collection) =>
-      Container(
-        width: double.infinity,
-        height: 190,
-        decoration: BoxDecoration(
-          border: Border(left: BorderSide(color: Colors.black, width: 3)),
-        ),
-        child: ListView.builder(
-          itemCount: documents.length,
-          itemBuilder: (context, index) {
-            return menuItem(documents[index], collection, documents.length);
-          },
-        ),
-      );
-
-  Widget menuItem(DocumentSnapshot document, collection, length) {
-    String docid = document.id;
-    return InkWell(
-        onTap: () async {
-          await Navigator.of(context).push(MaterialPageRoute(
-              builder: ((context) => AddPostPageDrink(collection, docid))));
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => TitleEditPage(
+                titleDoc.id,
+                titleName,
+                'Drink',
+              ),
+            ),
+          );
         },
-        child: Card(
-          child: ListTile(
-            title: Text(document['goods']),
-            subtitle: Text("${document['ja']}(タップで編集)"),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ElevatedButton(
-                    onPressed: () async {
-                      await uploadPicture(
-                          'Drink', collection, document['goods'], docid);
-                    },
-                    child: Text('画像UP')),
-                IconButton(
-                  icon: Icon(Icons.delete),
-                  onPressed: () async {
+        child: FutureBuilder<QuerySnapshot>(
+          future: FirebaseFirestore.instance
+              .collection('Eng')
+              .doc('Drink')
+              .collection('color')
+              .get(),
+          builder: (context, snapshot) {
+            if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+              final colorValue = snapshot.data!.docs[0]['color'] as int?;
+              final color = colorValue != null
+                  ? Color(colorValue)
+                  : Colors.lightGreen; // 万が一nullの場合の保険
+
+              return Container(
+                alignment: Alignment.centerLeft,
+                width: double.infinity,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    bottomLeft: Radius.circular(20),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      '   $titleName',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontStyle: FontStyle.italic,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    ElevatedButton(
+                      onPressed: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => AddPostPageDrinknew(titleName),
+                          ),
+                        );
+                      },
+                      child: const Text('メニュー追加'),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return Container(); // まだ読込中の場合やデータが無い場合
+          },
+        ),
+      ),
+    );
+  }
+
+  /// 各ジャンルに属するメニューをリスト表示
+  Widget _buildSectionContent(
+      List<DocumentSnapshot> documents, String collectionName) {
+    return Container(
+      width: double.infinity,
+      height: 190,
+      decoration: const BoxDecoration(
+        border: Border(left: BorderSide(color: Colors.black, width: 3)),
+      ),
+      child: ListView.builder(
+        itemCount: documents.length,
+        itemBuilder: (context, index) {
+          return _buildMenuItem(
+              documents[index], collectionName, documents.length);
+        },
+      ),
+    );
+  }
+
+  /// メニューアイテム表示
+  Widget _buildMenuItem(
+      DocumentSnapshot doc, String collectionName, int totalCount) {
+    final docId = doc.id;
+    final goodsName = doc['goods'] as String;
+    final imageUrl = doc['image'] as String? ?? '';
+    final cost = doc['cost'] as String? ?? '';
+    final jaName = doc['ja'] as String? ?? '';
+
+    return InkWell(
+      onTap: () async {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AddPostPageDrink(collectionName, docId),
+          ),
+        );
+      },
+      child: Card(
+        child: ListTile(
+          title: Text(goodsName),
+          subtitle: Text('$jaName (タップで編集)'),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton(
+                onPressed: () async {
+                  await uploadPicture(
+                      'Drink', collectionName, goodsName, docId);
+                },
+                child: const Text('画像UP'),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () async {
+                  // メニュー削除処理
+                  await FirebaseFirestore.instance
+                      .collection('Eng')
+                      .doc('Drink')
+                      .collection(collectionName)
+                      .doc(docId)
+                      .delete();
+
+                  // もし該当ジャンルのメニューが1つしか無かった場合はtitles内のジャンルも削除
+                  if (totalCount == 1) {
                     await FirebaseFirestore.instance
                         .collection('Eng')
                         .doc('Drink')
-                        .collection(collection)
-                        .doc(docid)
+                        .collection('titles')
+                        .where('title', isEqualTo: collectionName)
+                        .get()
+                        .then((querySnapshot) {
+                      for (var title in querySnapshot.docs) {
+                        FirebaseFirestore.instance
+                            .collection('Eng')
+                            .doc('Drink')
+                            .collection('titles')
+                            .doc(title.id)
+                            .delete();
+                      }
+                    });
+                  }
+
+                  // ストレージの画像があれば削除
+                  if (imageUrl.isNotEmpty) {
+                    await FirebaseStorage.instance
+                        .ref()
+                        .child('images/Drink/$collectionName/$goodsName.jpeg')
                         .delete();
-                    if (length == 1) {
-                      await FirebaseFirestore.instance
-                          .collection('Eng')
-                          .doc('Drink')
-                          .collection('titles')
-                          .where('title', isEqualTo: collection)
-                          .get()
-                          .then((QuerySnapshot querySnapshot) {
-                        querySnapshot.docs.forEach((doc) {
-                          FirebaseFirestore.instance
-                              .collection('Eng')
-                              .doc('Drink')
-                              .collection('titles')
-                              .doc(doc.id)
-                              .delete();
-                        });
-                      });
-                    }
-                    if (document['image'] != "") {
-                      await FirebaseStorage.instance
-                          .ref()
-                          .child(
-                              'images/Drink/$collection/${document['goods']}.jpeg')
-                          .delete();
-                    }
-                    Navigator.of(context).push(MaterialPageRoute(
-                        builder: ((context) => EngDrinkEditPageState())));
-                    // 投稿メッセージのドキュメントを削除
-                  },
-                ),
-                Text(document['cost'])
-              ],
-            ),
+                  }
+
+                  // 画面リフレッシュ
+                  if (mounted) {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (_) => const EngDrinkEditPageState(),
+                      ),
+                    );
+                  }
+                },
+              ),
+              Text(cost),
+            ],
           ),
-        ));
+        ),
+      ),
+    );
+  }
+
+  /// 余白
+  Widget _spacer(double size) {
+    return SizedBox(height: size);
   }
 }
 
-Future<void> uploadPicture(food, collection, name, docid) async {
+/// 画像をアップロードし、FireStoreの該当ドキュメントを更新する
+Future<void> uploadPicture(
+  String food,
+  String collection,
+  String name,
+  String docId,
+) async {
   try {
-    Uint8List? uint8list = await ImagePickerWeb.getImageAsBytes();
+    final Uint8List? uint8list = await ImagePickerWeb.getImageAsBytes();
     if (uint8list != null) {
-      var metadata = SettableMetadata(
-        contentType: "image/jpeg",
-      );
-      Reference referenceRoot = FirebaseStorage.instance
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+      final ref = FirebaseStorage.instance
           .ref()
           .child('images/$food/$collection/$name.jpeg');
-      await referenceRoot.putData(uint8list, metadata);
-      String downloadURL = await referenceRoot.getDownloadURL();
+
+      await ref.putData(uint8list, metadata);
+      final downloadURL = await ref.getDownloadURL();
+
       await FirebaseFirestore.instance
           .collection('Eng')
           .doc(food)
           .collection(collection)
-          .doc(docid)
+          .doc(docId)
           .update({'image': downloadURL});
     }
   } catch (e) {
-    print(e);
+    // エラー処理（必要に応じてログなど追加）
+    debugPrint(e.toString());
   }
 }
