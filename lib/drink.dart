@@ -3,16 +3,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'food.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'course.dart';
+import 'main.dart';
 
 class EngDrinkPageState extends StatefulWidget {
-  const EngDrinkPageState({Key? key}) : super(key: key);
+  const EngDrinkPageState({super.key});
 
   @override
   EngDrinkPage createState() => EngDrinkPage();
 }
 
 class EngDrinkPage extends State<EngDrinkPageState> {
-  final List<String> _favorite = [];
   final List<String> _image = [];
 
   final Uri _instagramUrl = Uri.parse(
@@ -176,7 +176,7 @@ class EngDrinkPage extends State<EngDrinkPageState> {
         InkWell(
           onTap: () async {
             await Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => const EngPageState()),
+              MaterialPageRoute(builder: (context) => EngPageState()),
             );
           },
           child: _menuButtonDark('Foods'),
@@ -187,12 +187,41 @@ class EngDrinkPage extends State<EngDrinkPageState> {
         InkWell(
           onTap: () async {
             await Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => const EngCoursePage()),
+              MaterialPageRoute(builder: (context) => EngCoursePage()),
             );
           },
           child: _menuButtonDark('Courses'),
         ),
+        const SizedBox(width: 10, height: 50),
+        _languageDropdown(),
       ],
+    );
+  }
+
+  Widget _languageDropdown() {
+    return DropdownButton<String>(
+      value: selectedLanguageValue,
+      items: supportedLanguages.map((lang) {
+        return DropdownMenuItem<String>(
+          // 実際の value は内部で利用したい値をセット
+          value: lang['value'],
+          // 表示ラベルは label を使う
+          child: Row(
+            children: [
+              Text(lang['label'] ?? ''),
+              const SizedBox(width: 5),
+              const Icon(Icons.language),
+            ],
+          ),
+        );
+      }).toList(),
+      onChanged: (newValue) {
+        if (newValue != null) {
+          setState(() {
+            selectedLanguageValue = newValue;
+          });
+        }
+      },
     );
   }
 
@@ -248,7 +277,7 @@ class EngDrinkPage extends State<EngDrinkPageState> {
               SectionContent(
                 documents: documents,
                 collection: titles['title'],
-                favorite: _favorite,
+                favorite: favorite,
                 image: _image,
               ),
               _spacer(30),
@@ -380,6 +409,7 @@ class _SectionContentState extends State<SectionContent> {
               document: widget.documents[index],
               favorite: widget.favorite,
               image: widget.image,
+              selectedlanguageValue: selectedLanguageValue,
             );
           },
         ),
@@ -392,12 +422,14 @@ class MenuItem extends StatefulWidget {
   final DocumentSnapshot document;
   final List<String> favorite;
   final List<String> image;
+  final String selectedlanguageValue;
 
   const MenuItem({
     Key? key,
     required this.document,
     required this.favorite,
     required this.image,
+    required this.selectedlanguageValue,
   }) : super(key: key);
 
   @override
@@ -407,26 +439,55 @@ class MenuItem extends StatefulWidget {
 class _MenuItemState extends State<MenuItem> {
   @override
   Widget build(BuildContext context) {
-    final isFavorite = widget.favorite.contains(widget.document['goods']);
-    final isImage = widget.image.contains(widget.document['goods']);
-    final hasImageUrl = widget.document['image'].toString().isNotEmpty;
+    // ドキュメントデータの取得。無い場合は空Map
+    final data = widget.document.data() as Map<String, dynamic>? ?? {};
 
+    // まずは「選択言語のキー」が存在するかチェック
+    final hasSelectedLangField = data.containsKey(widget.selectedlanguageValue);
+
+    // もし選択言語が存在しなければ "en" を使う
+    if (!hasSelectedLangField) {
+      // "en" フィールドの存在チェック
+      final hasEnField = data.containsKey('en');
+      if (!hasEnField) {
+        // en すらない場合 → フォールバックメッセージ
+        data['fallback'] = 'Not available in this language.';
+      } else {
+        // en がある場合 → それを「選択言語」として使う
+        data[widget.selectedlanguageValue] = data['goods'];
+      }
+    }
+
+    // 実際に表示するフィールドを取得する
+    final displayedName = data[widget.selectedlanguageValue] ??
+        data['fallback'] ?? // enも無い場合に備えたメッセージ
+        '';
+
+    // お気に入り判定・画像表示判定
+    final isFavorite = widget.favorite.contains(displayedName);
+    final isImage = widget.image.contains(displayedName);
+
+    // 画像URL
+    final imageExists = (data['image'] ?? "").toString().isNotEmpty;
+    final imageUrl = data['image'] ?? "";
+
+    // Google 画像検索用URL
     final Uri searchUrl = Uri.parse(
       "https://www.google.com/search?tbm=isch&q="
-      "${Uri.encodeQueryComponent(widget.document['ja'])}",
+      "${Uri.encodeQueryComponent(data['ja'] ?? '')}",
     );
 
     return InkWell(
       onTap: () {
-        if (!hasImageUrl) {
-          // Firestoreに画像URLが無い場合はGoogle画像検索へ
+        // 画像が無い場合は Google 画像検索へ遷移
+        if (!imageExists) {
           _launchUrl(searchUrl);
         } else {
           setState(() {
             if (isImage) {
-              widget.image.remove(widget.document['goods']);
+              widget.image.remove(displayedName);
             } else {
-              widget.image.add(widget.document['goods']);
+              widget.image.add(displayedName);
             }
           });
         }
@@ -435,8 +496,8 @@ class _MenuItemState extends State<MenuItem> {
         children: [
           Card(
             child: ListTile(
-              title: Text(widget.document['goods']),
-              subtitle: Text(widget.document['ja']),
+              title: Text(displayedName),
+              subtitle: Text(data['ja'] ?? ''),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -444,9 +505,9 @@ class _MenuItemState extends State<MenuItem> {
                     onPressed: () {
                       setState(() {
                         if (isFavorite) {
-                          widget.favorite.remove(widget.document['goods']);
+                          widget.favorite.remove(displayedName);
                         } else {
-                          widget.favorite.add(widget.document['goods']);
+                          widget.favorite.add(displayedName);
                         }
                       });
                     },
@@ -455,14 +516,14 @@ class _MenuItemState extends State<MenuItem> {
                       color: Colors.red,
                     ),
                   ),
-                  Text(widget.document['cost']),
+                  Text(data['cost'] ?? ''),
                 ],
               ),
             ),
           ),
-          if (isImage && hasImageUrl)
+          if (isImage && imageExists)
             Image.network(
-              widget.document['image'],
+              imageUrl,
               height: 150,
             ),
         ],

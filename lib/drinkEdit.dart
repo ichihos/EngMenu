@@ -5,7 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:image_picker_web/image_picker_web.dart';
-
+import 'main.dart';
 import 'Edit.dart';
 import 'foodEdit.dart';
 import 'drink.dart';
@@ -123,7 +123,36 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
             );
           },
         ),
+        const SizedBox(width: 10, height: 50),
+        _languageDropdownEdit(),
       ],
+    );
+  }
+
+  Widget _languageDropdownEdit() {
+    return DropdownButton<String>(
+      value: selectedLanguageValue,
+      items: supportedLanguages.map((lang) {
+        return DropdownMenuItem<String>(
+          // 実際の value は内部で利用したい値をセット
+          value: lang['value'],
+          // 表示ラベルは label を使う
+          child: Row(
+            children: [
+              Text(lang['label'] ?? ''),
+              const SizedBox(width: 5),
+              const Icon(Icons.language),
+            ],
+          ),
+        );
+      }).toList(),
+      onChanged: (newValue) {
+        if (newValue != null) {
+          setState(() {
+            selectedLanguageValue = newValue;
+          });
+        }
+      },
     );
   }
 

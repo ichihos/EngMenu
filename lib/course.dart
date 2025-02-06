@@ -5,7 +5,7 @@ import 'drink.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class EngCoursePage extends StatefulWidget {
-  const EngCoursePage({Key? key}) : super(key: key);
+  const EngCoursePage({super.key});
 
   @override
   _EngCoursePageState createState() => _EngCoursePageState();

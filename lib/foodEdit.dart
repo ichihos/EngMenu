@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'food.dart';
 import 'drinkEdit.dart';
-import 'Edit.dart'; // AddPostPageFood, AddPostPageFoodnew, TitleEditPage などが含まれる想定
+import 'Edit.dart';
 import 'package:image_picker_web/image_picker_web.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:typed_data';
 import 'courseEdit.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'main.dart';
+import 'package:firebase_vertexai/firebase_vertexai.dart';
 
 class EngPageEditState extends StatefulWidget {
   const EngPageEditState({Key? key}) : super(key: key);
@@ -18,6 +20,9 @@ class EngPageEditState extends StatefulWidget {
 
 class EngPageEdit extends State<EngPageEditState> {
   Color _myColor = Colors.lightGreen;
+  bool isTranslating = false;
+  int translationTotal = 0;
+  int translationProgress = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +41,20 @@ class EngPageEdit extends State<EngPageEditState> {
             _spacer(5),
             _sectionTitleNew(),
             _spacer(5),
-            _menuList(size),
+            if (isTranslating)
+              Column(
+                children: [
+                  Text('翻訳中... $translationProgress / $translationTotal'),
+                  // プログレスバーを表示する例
+                  LinearProgressIndicator(
+                    value: translationTotal == 0
+                        ? 0
+                        : translationProgress / translationTotal,
+                  ),
+                ],
+              )
+            else
+              _menuList(size),
           ],
         ),
       ),
@@ -398,8 +416,159 @@ class EngPageEdit extends State<EngPageEditState> {
           },
           child: _menuButton('コース編集'),
         ),
+        const SizedBox(width: 10, height: 50),
+        _languageDropdownEdit(),
       ],
     );
+  }
+
+  Widget _languageDropdownEdit() {
+    return DropdownButton<String>(
+      value: selectedLanguageValue,
+      items: supportedLanguages.map((lang) {
+        return DropdownMenuItem<String>(
+          value: lang['value'],
+          child: Row(
+            children: [
+              Text(lang['label'] ?? ''),
+              const SizedBox(width: 8),
+              const Icon(Icons.language),
+            ],
+          ),
+        );
+      }).toList(),
+      onChanged: (newValue) async {
+        if (newValue != null) {
+          setState(() {
+            selectedLanguageValue = newValue;
+          });
+          // 言語変更後、Firestore に翻訳がないデータがあればまとめて翻訳を実行する
+          await _checkAndTranslateMissingMenus();
+        }
+      },
+    );
+  }
+
+  final int maxRetries = 10; // 最大リトライ回数
+  final Duration retryDelay = Duration(seconds: 5);
+
+  Future<void> translateMenu(
+    String japaneseMenu,
+    ValueNotifier<String> translated,
+  ) async {
+    int attempts = 0;
+    while (attempts < maxRetries) {
+      try {
+        final vertexAI =
+            await FirebaseVertexAI.instanceFor(location: 'asia-northeast1');
+        final model = vertexAI.generativeModel(model: 'gemini-1.5-flash');
+
+        final prompt = '''
+次の日本の料理屋のメニューを${selectedLanguageValue}に翻訳してください。厳密に訳す必要はありません。
+どういった料理か伝わるようにお願いします。返答は翻訳後の料理名のみで。
+料理名：$japaneseMenu
+''';
+
+        await Future.delayed(const Duration(seconds: 2));
+
+        final response = await model.generateContent([Content.text(prompt)]);
+        if (response.text != null) {
+          translated.value = response.text!;
+          return;
+        } else {
+          throw Exception('No text in response');
+        }
+      } catch (e) {
+        attempts++;
+
+        if (attempts < maxRetries) {
+          await Future.delayed(retryDelay);
+        } else {
+          rethrow;
+        }
+      }
+    }
+  }
+
+  Future<void> _checkAndTranslateMissingMenus() async {
+    // すべての翻訳が必要なドキュメントを保持するリスト
+    final List<QueryDocumentSnapshot> docsNeedingTranslation = [];
+
+    final QuerySnapshot<Map<String, dynamic>> titlesSnapshot =
+        await FirebaseFirestore.instance
+            .collection('Eng')
+            .doc('Food')
+            .collection("titles")
+            .orderBy('order')
+            .get();
+
+    final titles = titlesSnapshot.docs;
+
+    // titles コレクション内のドキュメントを順番に処理
+    for (var titleDoc in titles) {
+      // titleDoc に格納されている 'title' フィールドをコレクション名に利用
+      final subCollectionName = titleDoc.data()['title'];
+      if (subCollectionName == null || subCollectionName is! String) {
+        // 'title' フィールドが存在しないか、文字列でない場合はスキップ
+        continue;
+      }
+
+      // サブコレクションを取得
+      final QuerySnapshot<Map<String, dynamic>> snapshot =
+          await FirebaseFirestore.instance
+              .collection('Eng')
+              .doc('Food')
+              .collection(subCollectionName)
+              .get();
+
+      // 翻訳が必要なドキュメントを抽出（選択中の言語のフィールドが無いもの）
+      final needingDocs = snapshot.docs.where((doc) {
+        final data = doc.data();
+        return data[selectedLanguageValue] == null;
+      }).toList();
+
+      // docsNeedingTranslation に不足分をまとめて追加
+      docsNeedingTranslation.addAll(needingDocs);
+    }
+
+    // 翻訳が必要なドキュメントが無ければ終了
+    if (docsNeedingTranslation.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      isTranslating = true; // 「翻訳中」表示用のフラグ
+      translationTotal = docsNeedingTranslation.length;
+      translationProgress = 0;
+    });
+
+    // 一件ずつ翻訳を実行して、Firestore に反映
+    for (final doc in docsNeedingTranslation) {
+      // doc.data() の戻り値を明示的に Map<String, dynamic> へキャスト
+      final data = doc.data() as Map<String, dynamic>;
+
+      // こうすることで data['ja'] が安全に書ける
+      final jaMenu = data['ja'];
+
+      // jaMenu が null や String 以外の場合もあるので必要ならチェック
+      if (jaMenu == null || jaMenu is! String || jaMenu.isEmpty) {
+        continue;
+      }
+      // 翻訳先を格納する ValueNotifier
+      final translated = ValueNotifier<String>('');
+      await translateMenu(jaMenu, translated);
+
+      // 翻訳結果を Firestore にアップデート
+      await doc.reference.update({selectedLanguageValue: translated.value});
+
+      setState(() {
+        translationProgress += 1;
+      });
+    }
+
+    setState(() {
+      isTranslating = false;
+    });
   }
 
   /// メニューボタンの共通UI

@@ -4,6 +4,7 @@ import 'drink.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'course.dart';
 import 'Edit.dart';
+import 'main.dart';
 
 class EngPageState extends StatefulWidget {
   const EngPageState({Key? key}) : super(key: key);
@@ -15,8 +16,6 @@ class EngPageState extends StatefulWidget {
 class EngPage extends State<EngPageState> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
-
-  final List<String> _favorite = [];
   final List<String> _image = [];
   int _count = 0;
 
@@ -85,10 +84,6 @@ class EngPage extends State<EngPageState> with AutomaticKeepAliveClientMixin {
                       17,
                     ),
                     _noticeText(
-                      'The menu is subject to change depending on the availability of ingredients.',
-                      Colors.red,
-                    ),
-                    _noticeText(
                       'Some menu items are subject to market value.',
                       Colors.red,
                     ),
@@ -147,7 +142,7 @@ class EngPage extends State<EngPageState> with AutomaticKeepAliveClientMixin {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        const SizedBox(width: 20, height: 50),
+        const SizedBox(width: 40, height: 50),
         InkWell(
           onTap: () async {
             if (_count < 7) {
@@ -179,7 +174,36 @@ class EngPage extends State<EngPageState> with AutomaticKeepAliveClientMixin {
           },
           child: _menuButtonDark('Courses'),
         ),
+        const SizedBox(width: 10, height: 50),
+        _languageDropdown(),
       ],
+    );
+  }
+
+  Widget _languageDropdown() {
+    return DropdownButton<String>(
+      value: selectedLanguageValue,
+      items: supportedLanguages.map((lang) {
+        return DropdownMenuItem<String>(
+          // 実際の value は内部で利用したい値をセット
+          value: lang['value'],
+          // 表示ラベルは label を使う
+          child: Row(
+            children: [
+              Text(lang['label'] ?? ''),
+              const SizedBox(width: 5),
+              const Icon(Icons.language),
+            ],
+          ),
+        );
+      }).toList(),
+      onChanged: (newValue) {
+        if (newValue != null) {
+          setState(() {
+            selectedLanguageValue = newValue;
+          });
+        }
+      },
     );
   }
 
@@ -232,8 +256,9 @@ class EngPage extends State<EngPageState> with AutomaticKeepAliveClientMixin {
               SectionContent(
                 documents: documents,
                 collection: titleDoc['title'],
-                favorite: _favorite,
+                favorite: favorite,
                 image: _image,
+                selectedlanguageValue: selectedLanguageValue,
               ),
               _spacer(30),
             ],
@@ -291,6 +316,7 @@ class SectionContent extends StatefulWidget {
   final String collection;
   final List<String> favorite;
   final List<String> image;
+  final String selectedlanguageValue;
 
   const SectionContent({
     Key? key,
@@ -298,6 +324,7 @@ class SectionContent extends StatefulWidget {
     required this.collection,
     required this.favorite,
     required this.image,
+    required this.selectedlanguageValue,
   }) : super(key: key);
 
   @override
@@ -358,6 +385,7 @@ class _SectionContentState extends State<SectionContent> {
               document: widget.documents[index],
               favorite: widget.favorite,
               image: widget.image,
+              selectedlanguageValue: widget.selectedlanguageValue,
             );
           },
         ),
@@ -370,12 +398,14 @@ class MenuItem extends StatefulWidget {
   final DocumentSnapshot document;
   final List<String> favorite;
   final List<String> image;
+  final String selectedlanguageValue;
 
   const MenuItem({
     Key? key,
     required this.document,
     required this.favorite,
     required this.image,
+    required this.selectedlanguageValue,
   }) : super(key: key);
 
   @override
@@ -385,25 +415,53 @@ class MenuItem extends StatefulWidget {
 class _MenuItemState extends State<MenuItem> {
   @override
   Widget build(BuildContext context) {
-    final isFavorite = widget.favorite.contains(widget.document['goods']);
-    final isImage = widget.image.contains(widget.document['goods']);
-    final imageExists = widget.document['image'] != "";
+    // ドキュメントデータの取得。無い場合は空Map
+    final data = widget.document.data() as Map<String, dynamic>? ?? {};
+
+    // まずは「選択言語のキー」が存在するかチェック
+    final hasSelectedLangField = data.containsKey(widget.selectedlanguageValue);
+
+    if (!hasSelectedLangField) {
+      // "en" フィールドの存在チェック
+      final hasEnField = data.containsKey('en');
+      if (!hasEnField) {
+        // en すらない場合 → フォールバックメッセージ
+        data['fallback'] = 'Not available in this language.';
+      } else {
+        data[widget.selectedlanguageValue] = data['goods'];
+      }
+    }
+
+    // 実際に表示するフィールドを取得する
+    final displayedName = data[widget.selectedlanguageValue] ??
+        data['fallback'] ?? // enも無い場合に備えたメッセージ
+        '';
+
+    // お気に入り判定・画像表示判定
+    final isFavorite = widget.favorite.contains(displayedName);
+    final isImage = widget.image.contains(displayedName);
+
+    // 画像URL
+    final imageExists = (data['image'] ?? "").toString().isNotEmpty;
+    final imageUrl = data['image'] ?? "";
+
+    // Google 画像検索用URL
     final Uri searchUrl = Uri.parse(
       "https://www.google.com/search?tbm=isch&q="
-      "${Uri.encodeQueryComponent(widget.document['ja'])}",
+      "${Uri.encodeQueryComponent(data['ja'] ?? '')}",
     );
 
     return InkWell(
       onTap: () {
-        // 画像が Firestore に無い場合は Google 画像検索へ遷移
+        // 画像が無い場合は Google 画像検索へ遷移
         if (!imageExists) {
           _launchUrl(searchUrl);
         } else {
           setState(() {
             if (isImage) {
-              widget.image.remove(widget.document['goods']);
+              widget.image.remove(displayedName);
             } else {
-              widget.image.add(widget.document['goods']);
+              widget.image.add(displayedName);
             }
           });
         }
@@ -412,8 +470,8 @@ class _MenuItemState extends State<MenuItem> {
         children: [
           Card(
             child: ListTile(
-              title: Text(widget.document['goods']),
-              subtitle: Text(widget.document['ja']),
+              title: Text(displayedName),
+              subtitle: Text(data['ja'] ?? ''),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -421,9 +479,9 @@ class _MenuItemState extends State<MenuItem> {
                     onPressed: () {
                       setState(() {
                         if (isFavorite) {
-                          widget.favorite.remove(widget.document['goods']);
+                          widget.favorite.remove(displayedName);
                         } else {
-                          widget.favorite.add(widget.document['goods']);
+                          widget.favorite.add(displayedName);
                         }
                       });
                     },
@@ -432,14 +490,14 @@ class _MenuItemState extends State<MenuItem> {
                       color: Colors.red,
                     ),
                   ),
-                  Text(widget.document['cost']),
+                  Text(data['cost'] ?? ''),
                 ],
               ),
             ),
           ),
           if (isImage && imageExists)
             Image.network(
-              widget.document['image'],
+              imageUrl,
               height: 150,
             ),
         ],
