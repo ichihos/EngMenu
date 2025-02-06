@@ -17,7 +17,7 @@ Future<void> translateMenu(
   ValueNotifier<String> translated,
 ) async {
   final model =
-      FirebaseVertexAI.instance.generativeModel(model: 'gemini-2.0-flash-exp');
+      FirebaseVertexAI.instance.generativeModel(model: 'gemini-1.5-flash');
 
   final prompt = '''
 次の日本の料理屋のメニューを英語にしてください。厳密に訳す必要はありません。

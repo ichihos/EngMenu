@@ -45,7 +45,6 @@ class EngPageEdit extends State<EngPageEditState> {
               Column(
                 children: [
                   Text('翻訳中... $translationProgress / $translationTotal'),
-                  // プログレスバーを表示する例
                   LinearProgressIndicator(
                     value: translationTotal == 0
                         ? 0
@@ -303,7 +302,42 @@ class EngPageEdit extends State<EngPageEditState> {
     String collection,
     int length,
   ) {
+    // ドキュメントデータを取得（null なら空の Map）
+    final data = document.data() as Map<String, dynamic>? ?? {};
+
+    // 1. 「selectedLanguageValue」キーを持っているかチェック
+    final hasSelectedLangField = data.containsKey(selectedLanguageValue);
+    if (!hasSelectedLangField) {
+      // 「goods」キーがあるかチェック
+      final hasGoodsField = data.containsKey('goods');
+      if (!hasGoodsField) {
+        // どちらも無い場合 → フォールバック用メッセージ
+        data['fallback'] = 'Not available in this language.';
+      } else {
+        // selectedLanguageValue フィールドが無いので、代わりに goods を使う
+        data[selectedLanguageValue] = data['goods'];
+      }
+    }
+
+    // 2. 表示用の文字列を決定
+    final displayedName = data[selectedLanguageValue] ?? data['fallback'] ?? '';
+
+    // 「ja」フィールドの値（日本語表示用）。無い場合は空文字にしておく
+    final displayedJa = data['ja'] ?? '';
+
+    // 価格情報があれば表示したい
+    final costText = data['cost'] ?? '';
+
+    // 画像 URL
+    final imageUrl = data['image'] ?? '';
+
+    // _uploadPicture や削除時のファイル名に使用するために
+    // 「goods」フィールドがあればそれを優先。無い場合は表示名を使う
+    final goodsForFileName = data['goods'] ?? displayedName;
+
+    // ドキュメントのID
     final String docId = document.id;
+
     return InkWell(
       onTap: () async {
         // タップで編集画面へ遷移
@@ -315,22 +349,32 @@ class EngPageEdit extends State<EngPageEditState> {
       },
       child: Card(
         child: ListTile(
-          title: Text(document['goods']),
-          subtitle: Text("${document['ja']}(タップで編集)"),
+          // 3. 多言語対応した `displayedName` を表示
+          title: Text(displayedName),
+          // 日本語の原文（ja）をサブタイトルに表示（編集誘導文付き）
+          subtitle: Text("$displayedJa (タップで編集)"),
+
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // 画像アップロードボタン
               ElevatedButton(
                 onPressed: () async {
                   await _uploadPicture(
-                      'Food', collection, document['goods'], docId);
+                    'Food',
+                    collection,
+                    goodsForFileName,
+                    docId,
+                  );
                 },
                 child: const Text('画像UP'),
               ),
+
+              // 削除アイコン
               IconButton(
                 icon: const Icon(Icons.delete),
                 onPressed: () async {
-                  // 削除処理
+                  // 1. Firestore で該当ドキュメントを削除
                   await FirebaseFirestore.instance
                       .collection('Eng')
                       .doc('Food')
@@ -338,7 +382,7 @@ class EngPageEdit extends State<EngPageEditState> {
                       .doc(docId)
                       .delete();
 
-                  // 最後の1件を削除した場合、タイトル自体も削除
+                  // 2. 最後の1件なら「titles」コレクションのタイトル自体も削除
                   if (length == 1) {
                     final query = await FirebaseFirestore.instance
                         .collection('Eng')
@@ -346,6 +390,7 @@ class EngPageEdit extends State<EngPageEditState> {
                         .collection('titles')
                         .where('title', isEqualTo: collection)
                         .get();
+
                     for (var doc in query.docs) {
                       await FirebaseFirestore.instance
                           .collection('Eng')
@@ -356,22 +401,24 @@ class EngPageEdit extends State<EngPageEditState> {
                     }
                   }
 
-                  // 画像があればストレージも削除
-                  if (document['image'] != "") {
+                  // 3. 画像があればストレージも削除
+                  if (imageUrl.isNotEmpty) {
                     await FirebaseStorage.instance
                         .ref()
-                        .child(
-                            'images/food/$collection/${document['goods']}.jpeg')
+                        .child('images/food/$collection/$goodsForFileName.jpeg')
                         .delete();
                   }
 
+                  // 4. 画面を再読み込みまたは別画面へ
                   if (!mounted) return;
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const EngPageEditState()),
                   );
                 },
               ),
-              Text(document['cost']),
+
+              // 価格表示
+              Text(costText),
             ],
           ),
         ),
@@ -417,7 +464,7 @@ class EngPageEdit extends State<EngPageEditState> {
           child: _menuButton('コース編集'),
         ),
         const SizedBox(width: 10, height: 50),
-        _languageDropdownEdit(),
+        if (isTranslating) Text("wait") else _languageDropdownEdit(),
       ],
     );
   }

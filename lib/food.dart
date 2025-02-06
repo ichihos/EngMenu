@@ -423,7 +423,7 @@ class _MenuItemState extends State<MenuItem> {
 
     if (!hasSelectedLangField) {
       // "en" フィールドの存在チェック
-      final hasEnField = data.containsKey('en');
+      final hasEnField = data.containsKey('goods');
       if (!hasEnField) {
         // en すらない場合 → フォールバックメッセージ
         data['fallback'] = 'Not available in this language.';
