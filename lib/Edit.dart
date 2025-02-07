@@ -20,7 +20,7 @@ Future<void> translateMenu(
       FirebaseVertexAI.instance.generativeModel(model: 'gemini-1.5-flash');
 
   final prompt = '''
-次の日本の料理屋のメニューを英語にしてください。厳密に訳す必要はありません。
+次の日本の料理屋のメニューを$selectedLanguageValueにしてください。厳密に訳す必要はありません。
 どういった料理か伝わるようにお願いします。返答は翻訳後の料理名のみで。
 料理名：$japanesemenu
 ''';
@@ -97,7 +97,7 @@ abstract class BaseAddPostPageState<T extends BaseAddPostPage>
 
     if (snap.exists) {
       final data = snap.data() as Map<String, dynamic>;
-      goodsController.text = data['goods'] ?? '';
+      goodsController.text = data[selectedLanguageValue] ?? '';
       costController.text = data['cost'] ?? '';
       japaneseController.text = data['ja'] ?? '';
       orderController.text = data['order'] ?? '';

@@ -64,10 +64,11 @@ class EngDrinkPage extends State<EngDrinkPageState> {
               ),
               SliverToBoxAdapter(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     _spacer(5),
                     _menuButtons(),
+                    _languageDropdown(),
                     _noticeTextUnderline(
                       'Additional 10% service charge will be added.',
                       Colors.red,
@@ -192,8 +193,6 @@ class EngDrinkPage extends State<EngDrinkPageState> {
           },
           child: _menuButtonDark('Courses'),
         ),
-        const SizedBox(width: 10, height: 50),
-        _languageDropdown(),
       ],
     );
   }

@@ -35,9 +35,11 @@ class EngPageEdit extends State<EngPageEditState> {
       body: SingleChildScrollView(
         physics: const NeverScrollableScrollPhysics(),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             _spacer(5),
             _menuButtons(),
+            if (isTranslating) Text("wait") else _languageDropdownEdit(),
             _spacer(5),
             _sectionTitleNew(),
             _spacer(5),
@@ -463,8 +465,6 @@ class EngPageEdit extends State<EngPageEditState> {
           },
           child: _menuButton('コース編集'),
         ),
-        const SizedBox(width: 10, height: 50),
-        if (isTranslating) Text("wait") else _languageDropdownEdit(),
       ],
     );
   }

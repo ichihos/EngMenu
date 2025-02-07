@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
@@ -37,9 +36,11 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
       body: SingleChildScrollView(
         physics: const NeverScrollableScrollPhysics(),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             _spacer(5),
             _buildMenuButtons(),
+            if (isTranslating) Text("wait") else _languageDropdownEdit(),
             _buildNewSectionTitle(),
             _spacer(5),
             if (isTranslating)
@@ -114,7 +115,7 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _buildMenuButton(
-          label: 'Food編集',
+          label: 'Drink編集',
           onPressed: () async {
             await Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const EngPageEditState()),
@@ -139,8 +140,6 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
             );
           },
         ),
-        const SizedBox(width: 10, height: 50),
-        if (isTranslating) Text("wait") else _languageDropdownEdit(),
       ],
     );
   }
@@ -549,7 +548,7 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
         // タップで編集画面へ遷移
         await Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => AddPostPageFood(collection, docId),
+            builder: (_) => AddPostPageDrink(collection, docId),
           ),
         );
       },
@@ -567,7 +566,7 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
               ElevatedButton(
                 onPressed: () async {
                   await _uploadPicture(
-                    'Food',
+                    'Drink',
                     collection,
                     goodsForFileName,
                     docId,
@@ -583,7 +582,7 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
                   // 1. Firestore で該当ドキュメントを削除
                   await FirebaseFirestore.instance
                       .collection('Eng')
-                      .doc('Food')
+                      .doc('Drink')
                       .collection(collection)
                       .doc(docId)
                       .delete();
@@ -592,7 +591,7 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
                   if (length == 1) {
                     final query = await FirebaseFirestore.instance
                         .collection('Eng')
-                        .doc('Food')
+                        .doc('Drink')
                         .collection('titles')
                         .where('title', isEqualTo: collection)
                         .get();
@@ -600,7 +599,7 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
                     for (var doc in query.docs) {
                       await FirebaseFirestore.instance
                           .collection('Eng')
-                          .doc('Food')
+                          .doc('Drink')
                           .collection('titles')
                           .doc(doc.id)
                           .delete();
@@ -611,7 +610,8 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
                   if (imageUrl.isNotEmpty) {
                     await FirebaseStorage.instance
                         .ref()
-                        .child('images/food/$collection/$goodsForFileName.jpeg')
+                        .child(
+                            'images/drink/$collection/$goodsForFileName.jpeg')
                         .delete();
                   }
 
@@ -640,7 +640,7 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
 
 /// 画像をアップロードし、FireStoreの該当ドキュメントを更新する
 Future<void> _uploadPicture(
-  String food,
+  String drink,
   String collection,
   String name,
   String docId,
@@ -651,14 +651,14 @@ Future<void> _uploadPicture(
       final metadata = SettableMetadata(contentType: "image/jpeg");
       final referenceRoot = FirebaseStorage.instance
           .ref()
-          .child('images/$food/$collection/$name.jpeg');
+          .child('images/$drink/$collection/$name.jpeg');
 
       await referenceRoot.putData(uint8list, metadata);
       final String downloadURL = await referenceRoot.getDownloadURL();
 
       await FirebaseFirestore.instance
           .collection('Eng')
-          .doc(food)
+          .doc(drink)
           .collection(collection)
           .doc(docId)
           .update({'image': downloadURL});
