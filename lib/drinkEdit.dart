@@ -441,41 +441,31 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
 
               return Container(
                 alignment: Alignment.centerLeft,
-                width: double.infinity,
-                height: 30,
                 decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    bottomLeft: Radius.circular(20),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      '   $titleName',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontStyle: FontStyle.italic,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    ElevatedButton(
+                    color: color,
+                    borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        bottomLeft: Radius.circular(20))),
+                width: double.infinity,
+                constraints: BoxConstraints(minHeight: 30),
+                child: Wrap(children: [
+                  Text('   $titleName',
+                      style: TextStyle(
+                          fontSize: 20,
+                          fontStyle: FontStyle.italic,
+                          color: Colors.white)),
+                  SizedBox(width: 10),
+                  ElevatedButton(
                       onPressed: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => AddPostPageDrinknew(titleName),
-                          ),
-                        );
+                        await Navigator.of(context).push(MaterialPageRoute(
+                            builder: ((context) =>
+                                AddPostPageDrinknew(titleName))));
                       },
-                      child: const Text('メニュー追加'),
-                    ),
-                  ],
-                ),
+                      child: Text('メニュー追加'))
+                ]),
               );
             }
-            return Container(); // まだ読込中の場合やデータが無い場合
+            return Container();
           },
         ),
       ),

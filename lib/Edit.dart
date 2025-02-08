@@ -112,7 +112,7 @@ abstract class BaseAddPostPageState<T extends BaseAddPostPage>
         .collection(widget.collection)
         .doc(widget.docid)
         .update({
-      'goods': goodsController.text,
+      selectedLanguageValue: goodsController.text,
       'cost': costController.text,
       'ja': japaneseController.text,
       'order': orderController.text,

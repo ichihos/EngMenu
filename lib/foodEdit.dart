@@ -207,76 +207,52 @@ class EngPageEdit extends State<EngPageEditState> {
     );
   }
 
-  /// タイトル行（色付きの背景 + タップでタイトル編集 + メニュー追加ボタン）
-  Widget _sectionTitle(DocumentSnapshot title) {
-    return Align(
+  Widget _sectionTitle(DocumentSnapshot title) => Align(
       alignment: Alignment.centerLeft,
-      child: FutureBuilder<QuerySnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('Eng')
-            .doc('Food')
-            .collection('color')
-            .get(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Container();
-          }
-          if (!snapshot.hasData || snapshot.data == null) {
-            return Container();
-          }
-
-          final documents = snapshot.data!.docs;
-          final colorValue = documents[0]['color'];
-
-          return InkWell(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) =>
-                      TitleEditPage(title.id, title['title'], 'Food'),
-                ),
-              );
-            },
-            child: Container(
-              alignment: Alignment.centerLeft,
-              width: double.infinity,
-              height: 30,
-              decoration: BoxDecoration(
-                color: Color(colorValue),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  bottomLeft: Radius.circular(20),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    '   ${title['title']}',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontStyle: FontStyle.italic,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: () async {
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => AddPostPageFoodnew(title['title']),
-                        ),
-                      );
-                    },
-                    child: const Text('メニュー追加'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
+      child: InkWell(
+          onTap: () {
+            Navigator.of(context).push(MaterialPageRoute(
+                builder: ((context) =>
+                    TitleEditPage(title.id, title['title'], 'Drink'))));
+          },
+          child: FutureBuilder<QuerySnapshot>(
+              future: FirebaseFirestore.instance
+                  .collection('Eng')
+                  .doc('Drink')
+                  .collection('color')
+                  .get(),
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  final documents = snapshot.data!.docs;
+                  final color = documents[0]['color'];
+                  return Container(
+                    alignment: Alignment.centerLeft,
+                    decoration: BoxDecoration(
+                        color: Color(color),
+                        borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(20),
+                            bottomLeft: Radius.circular(20))),
+                    width: double.infinity,
+                    constraints: BoxConstraints(minHeight: 30),
+                    child: Wrap(children: [
+                      Text('   ${title['title']}',
+                          style: TextStyle(
+                              fontSize: 20,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.white)),
+                      SizedBox(width: 10),
+                      ElevatedButton(
+                          onPressed: () async {
+                            await Navigator.of(context).push(MaterialPageRoute(
+                                builder: ((context) =>
+                                    AddPostPageDrinknew(title['title']))));
+                          },
+                          child: Text('メニュー追加'))
+                    ]),
+                  );
+                }
+                return Container();
+              })));
 
   /// セクション内部（Foodリスト）
   Widget _sectionContent(
