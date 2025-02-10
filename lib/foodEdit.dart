@@ -214,12 +214,12 @@ class EngPageEdit extends State<EngPageEditState> {
           onTap: () {
             Navigator.of(context).push(MaterialPageRoute(
                 builder: ((context) =>
-                    TitleEditPage(title.id, title['title'], 'Drink'))));
+                    TitleEditPage(title.id, title['title'], 'Food'))));
           },
           child: FutureBuilder<QuerySnapshot>(
               future: FirebaseFirestore.instance
                   .collection('Eng')
-                  .doc('Drink')
+                  .doc('Food')
                   .collection('color')
                   .get(),
               builder: (context, snapshot) {
