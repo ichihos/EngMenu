@@ -46,7 +46,8 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
             if (isTranslating)
               Column(
                 children: [
-                  Text('翻訳中... $translationProgress / $translationTotal'),
+                  Text('翻訳中... $translationProgress / $translationTotal',
+                      style: TextStyle(fontSize: 30)),
                   LinearProgressIndicator(
                     value: translationTotal == 0
                         ? 0
@@ -115,7 +116,7 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _buildMenuButton(
-          label: 'Drink編集',
+          label: 'Food編集',
           onPressed: () async {
             await Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const EngPageEditState()),
@@ -163,6 +164,8 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
         if (newValue != null) {
           setState(() {
             selectedLanguageValue = newValue;
+            selectedLanguageLabel = supportedLanguages
+                .firstWhere((lang) => lang['value'] == newValue)['label']!;
           });
           // 言語変更後、Firestore に翻訳がないデータがあればまとめて翻訳を実行する
           await _checkAndTranslateMissingMenus();
@@ -608,7 +611,8 @@ class _EngDrinkEditPageState extends State<EngDrinkEditPageState> {
                   // 4. 画面を再読み込みまたは別画面へ
                   if (!mounted) return;
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const EngPageEditState()),
+                    MaterialPageRoute(
+                        builder: (_) => const EngDrinkEditPageState()),
                   );
                 },
               ),

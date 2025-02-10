@@ -11,7 +11,6 @@ import 'package:firebase_vertexai/firebase_vertexai.dart';
 /// 共通で使う関数やウィジェット
 /// ------------------------------
 
-/// 日本語メニューを英語に翻訳する（Vertex AI）。
 Future<void> translateMenu(
   String japanesemenu,
   ValueNotifier<String> translated,
@@ -20,8 +19,8 @@ Future<void> translateMenu(
       FirebaseVertexAI.instance.generativeModel(model: 'gemini-1.5-flash');
 
   final prompt = '''
-次の日本の料理屋のメニューを$selectedLanguageValueにしてください。厳密に訳す必要はありません。
-どういった料理か伝わるようにお願いします。返答は翻訳後の料理名のみで。
+次の日本の料理屋のメニューを$selectedLanguageLabelに翻訳してください。厳密に訳す必要はありません。
+どういった料理か伝わるような訳でお願いします。返答は翻訳後の料理名のみ。
 料理名：$japanesemenu
 ''';
 
@@ -162,7 +161,7 @@ abstract class BaseAddPostPageState<T extends BaseAddPostPage>
                     valueListenable: translated,
                     builder: (context, value, child) {
                       return buildTextFormField(
-                        label: '品名(英語)',
+                        label: '品名(他言語)',
                         controller: goodsController,
                       );
                     },
@@ -205,10 +204,7 @@ abstract class BaseAddPostPageState<T extends BaseAddPostPage>
     );
   }
 
-  /// 「続けて編集」ボタンの挙動（各ページでオーバーライドする場合はここでメソッドを定義）
   void onPressedContinueEdit();
-
-  /// 「ホームに戻る」ボタンの挙動（同上）
   void onPressedGoHome();
 }
 
@@ -293,6 +289,9 @@ abstract class BaseAddPostPageNewState<T extends BaseAddPostPageNew>
 
   final ValueNotifier<String> translated = ValueNotifier<String>('');
   final TextEditingController goodsController = TextEditingController();
+  final TextEditingController costController = TextEditingController();
+  final TextEditingController japaneseController = TextEditingController();
+  final TextEditingController orderController = TextEditingController();
 
   Future<void> _saveData() async {
     // 新規ドキュメントを作成
@@ -327,7 +326,7 @@ abstract class BaseAddPostPageNewState<T extends BaseAddPostPageNew>
             children: <Widget>[
               buildTextFormField(
                 label: '品名(日本語)',
-                controller: TextEditingController(),
+                controller: japaneseController,
                 maxLines: 3,
                 onChanged: (value) => setState(() => japanese = value),
               ),
@@ -343,7 +342,7 @@ abstract class BaseAddPostPageNewState<T extends BaseAddPostPageNew>
                 valueListenable: translated,
                 builder: (context, value, child) {
                   return TextFormField(
-                    decoration: const InputDecoration(labelText: '品名(英語)'),
+                    decoration: const InputDecoration(labelText: '品名（多言語)'),
                     keyboardType: TextInputType.multiline,
                     maxLines: 3,
                     controller: goodsController,
@@ -353,13 +352,13 @@ abstract class BaseAddPostPageNewState<T extends BaseAddPostPageNew>
               ),
               buildTextFormField(
                 label: '値段',
-                controller: TextEditingController(),
+                controller: costController,
                 maxLines: 3,
                 onChanged: (value) => setState(() => cost = value),
               ),
               buildTextFormField(
                 label: '順番(辞書順)',
-                controller: TextEditingController(),
+                controller: orderController,
                 maxLines: 3,
                 onChanged: (value) => setState(() => order = value),
               ),
@@ -443,6 +442,10 @@ class _AddPostPagenewState extends State<AddPostPagenew> {
   String order = '';
   final ValueNotifier<String> translated = ValueNotifier<String>('');
   final TextEditingController goodsController = TextEditingController();
+  final TextEditingController costController = TextEditingController();
+  final TextEditingController japaneseController = TextEditingController();
+  final TextEditingController orderController = TextEditingController();
+  final TextEditingController genreController = TextEditingController();
 
   Future<void> _saveData() async {
     // 新規ジャンル (genre) にメニューを追加
@@ -481,13 +484,13 @@ class _AddPostPagenewState extends State<AddPostPagenew> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               buildTextFormField(
-                label: 'ジャンル名(英語)',
-                controller: TextEditingController(),
+                label: 'ジャンル名(他言語)',
+                controller: genreController,
                 onChanged: (value) => setState(() => genre = value),
               ),
               buildTextFormField(
                 label: '品名(日本語)',
-                controller: TextEditingController(),
+                controller: japaneseController,
                 onChanged: (value) => setState(() => japanese = value),
               ),
               ElevatedButton(
@@ -502,7 +505,7 @@ class _AddPostPagenewState extends State<AddPostPagenew> {
                 valueListenable: translated,
                 builder: (context, value, child) {
                   return TextFormField(
-                    decoration: const InputDecoration(labelText: '品名(英語)'),
+                    decoration: const InputDecoration(labelText: '品名(他言語)'),
                     keyboardType: TextInputType.multiline,
                     maxLines: 3,
                     controller: goodsController,
@@ -512,12 +515,12 @@ class _AddPostPagenewState extends State<AddPostPagenew> {
               ),
               buildTextFormField(
                 label: '値段',
-                controller: TextEditingController(),
+                controller: costController,
                 onChanged: (value) => setState(() => cost = value),
               ),
               buildTextFormField(
                 label: '順番(数字)',
-                controller: TextEditingController(),
+                controller: orderController,
                 onChanged: (value) => setState(() => order = value),
               ),
               const SizedBox(height: 16),
@@ -561,6 +564,10 @@ class _AddPostPagenewDrinkState extends State<AddPostPagenewDrink> {
   String order = '';
   final ValueNotifier<String> translated = ValueNotifier<String>('');
   final TextEditingController goodsController = TextEditingController();
+  final TextEditingController costController = TextEditingController();
+  final TextEditingController japaneseController = TextEditingController();
+  final TextEditingController orderController = TextEditingController();
+  final TextEditingController genreController = TextEditingController();
 
   Future<void> _saveData() async {
     // 新規ジャンル (genre) にメニューを追加
@@ -597,13 +604,13 @@ class _AddPostPagenewDrinkState extends State<AddPostPagenewDrink> {
           child: Column(
             children: <Widget>[
               buildTextFormField(
-                label: 'ジャンル名(英語)',
-                controller: TextEditingController(),
+                label: 'ジャンル名(他言語)',
+                controller: genreController,
                 onChanged: (value) => setState(() => genre = value),
               ),
               buildTextFormField(
                 label: '品名(日本語)',
-                controller: TextEditingController(),
+                controller: japaneseController,
                 onChanged: (value) => setState(() => japanese = value),
               ),
               ElevatedButton(
@@ -618,7 +625,7 @@ class _AddPostPagenewDrinkState extends State<AddPostPagenewDrink> {
                 valueListenable: translated,
                 builder: (context, value, child) {
                   return TextFormField(
-                    decoration: const InputDecoration(labelText: '品名(英語)'),
+                    decoration: const InputDecoration(labelText: '品名(他言語)'),
                     maxLines: 3,
                     controller: goodsController,
                     onChanged: (v) => setState(() => goods = v),
@@ -627,12 +634,12 @@ class _AddPostPagenewDrinkState extends State<AddPostPagenewDrink> {
               ),
               buildTextFormField(
                 label: '値段',
-                controller: TextEditingController(),
+                controller: costController,
                 onChanged: (value) => setState(() => cost = value),
               ),
               buildTextFormField(
                 label: '順番(数字)',
-                controller: TextEditingController(),
+                controller: orderController,
                 onChanged: (value) => setState(() => order = value),
               ),
               const SizedBox(height: 16),
@@ -673,7 +680,7 @@ class AddPostPageCourse extends StatefulWidget {
 
 class _AddPostPageCourseState extends State<AddPostPageCourse> {
   final goodsController = TextEditingController(); // title(役割)
-  final costController = TextEditingController(); // discription(英語表記)
+  final costController = TextEditingController(); // discription(他言語表記)
   final japaneseController = TextEditingController(); // 日本語
   final orderController = TextEditingController();
   final ValueNotifier<String> translated = ValueNotifier<String>('');
@@ -757,7 +764,7 @@ class _AddPostPageCourseState extends State<AddPostPageCourse> {
                     valueListenable: translated,
                     builder: (context, value, child) {
                       return buildTextFormField(
-                        label: '品名(英語)',
+                        label: '品名(他言語)',
                         controller: costController,
                       );
                     },
@@ -962,6 +969,9 @@ class _AddPostPagenewCourseState extends State<AddPostPagenewCourse> {
   String order = '';
   final ValueNotifier<String> translated = ValueNotifier<String>('');
   final TextEditingController goodsController = TextEditingController();
+  final TextEditingController japaneseController = TextEditingController();
+  final TextEditingController orderController = TextEditingController();
+  final TextEditingController genreController = TextEditingController();
 
   Future<void> _saveData() async {
     await FirebaseFirestore.instance
@@ -991,12 +1001,12 @@ class _AddPostPagenewCourseState extends State<AddPostPagenewCourse> {
             children: <Widget>[
               buildTextFormField(
                 label: '役割(例: main)',
-                controller: TextEditingController(),
+                controller: genreController,
                 onChanged: (value) => setState(() => genre = value),
               ),
               buildTextFormField(
                 label: '名前(日本語)',
-                controller: TextEditingController(),
+                controller: japaneseController,
                 onChanged: (value) => setState(() => japanese = value),
               ),
               ElevatedButton(
@@ -1011,7 +1021,7 @@ class _AddPostPagenewCourseState extends State<AddPostPagenewCourse> {
                 valueListenable: translated,
                 builder: (context, value, child) {
                   return TextFormField(
-                    decoration: const InputDecoration(labelText: '品名(英語)'),
+                    decoration: const InputDecoration(labelText: '品名(他言語)'),
                     keyboardType: TextInputType.multiline,
                     maxLines: 3,
                     controller: goodsController,
@@ -1021,7 +1031,7 @@ class _AddPostPagenewCourseState extends State<AddPostPagenewCourse> {
               ),
               buildTextFormField(
                 label: '順番',
-                controller: TextEditingController(),
+                controller: orderController,
                 onChanged: (value) => setState(() => order = value),
               ),
               const SizedBox(height: 16),
@@ -1065,6 +1075,10 @@ class _AddPostnewCourseState extends State<AddPostnewCourse> {
   String order = '';
   final ValueNotifier<String> translated = ValueNotifier<String>('');
   final TextEditingController goodsController = TextEditingController();
+  final TextEditingController japaneseController = TextEditingController();
+  final TextEditingController orderController = TextEditingController();
+  final TextEditingController coursenameController = TextEditingController();
+  final TextEditingController genreController = TextEditingController();
 
   Future<void> _saveData() async {
     // 新しいコース名のサブコレクションを作成し、1件目のドキュメントを追加
@@ -1102,18 +1116,18 @@ class _AddPostnewCourseState extends State<AddPostnewCourse> {
           child: Column(
             children: <Widget>[
               buildTextFormField(
-                label: 'コース名(英語)',
-                controller: TextEditingController(),
+                label: 'コース名(他言語)',
+                controller: coursenameController,
                 onChanged: (value) => setState(() => coursename = value),
               ),
               buildTextFormField(
                 label: '役割(例: main)',
-                controller: TextEditingController(),
+                controller: genreController,
                 onChanged: (value) => setState(() => genre = value),
               ),
               buildTextFormField(
                 label: '名前(日本語)',
-                controller: TextEditingController(),
+                controller: japaneseController,
                 onChanged: (value) => setState(() => japanese = value),
               ),
               ElevatedButton(
@@ -1128,7 +1142,7 @@ class _AddPostnewCourseState extends State<AddPostnewCourse> {
                 valueListenable: translated,
                 builder: (context, value, child) {
                   return TextFormField(
-                    decoration: const InputDecoration(labelText: '品名(英語)'),
+                    decoration: const InputDecoration(labelText: '品名(他言語)'),
                     keyboardType: TextInputType.multiline,
                     maxLines: 3,
                     controller: goodsController,
@@ -1138,7 +1152,7 @@ class _AddPostnewCourseState extends State<AddPostnewCourse> {
               ),
               buildTextFormField(
                 label: '順番',
-                controller: TextEditingController(),
+                controller: orderController,
                 onChanged: (value) => setState(() => order = value),
               ),
               const SizedBox(height: 16),

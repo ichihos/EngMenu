@@ -199,6 +199,8 @@ class EngPage extends State<EngPageState> with AutomaticKeepAliveClientMixin {
         if (newValue != null) {
           setState(() {
             selectedLanguageValue = newValue;
+            selectedLanguageLabel = supportedLanguages
+                .firstWhere((lang) => lang['value'] == newValue)['label']!;
           });
         }
       },

@@ -218,6 +218,8 @@ class EngDrinkPage extends State<EngDrinkPageState> {
         if (newValue != null) {
           setState(() {
             selectedLanguageValue = newValue;
+            selectedLanguageLabel = supportedLanguages
+                .firstWhere((lang) => lang['value'] == newValue)['label']!;
           });
         }
       },

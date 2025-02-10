@@ -46,7 +46,8 @@ class EngPageEdit extends State<EngPageEditState> {
             if (isTranslating)
               Column(
                 children: [
-                  Text('翻訳中... $translationProgress / $translationTotal'),
+                  Text('翻訳中... $translationProgress / $translationTotal',
+                      style: TextStyle(fontSize: 30)),
                   LinearProgressIndicator(
                     value: translationTotal == 0
                         ? 0
@@ -245,7 +246,7 @@ class EngPageEdit extends State<EngPageEditState> {
                           onPressed: () async {
                             await Navigator.of(context).push(MaterialPageRoute(
                                 builder: ((context) =>
-                                    AddPostPageDrinknew(title['title']))));
+                                    AddPostPageFoodnew(title['title']))));
                           },
                           child: Text('メニュー追加'))
                     ]),
@@ -464,6 +465,8 @@ class EngPageEdit extends State<EngPageEditState> {
         if (newValue != null) {
           setState(() {
             selectedLanguageValue = newValue;
+            selectedLanguageLabel = supportedLanguages
+                .firstWhere((lang) => lang['value'] == newValue)['label']!;
           });
           // 言語変更後、Firestore に翻訳がないデータがあればまとめて翻訳を実行する
           await _checkAndTranslateMissingMenus();

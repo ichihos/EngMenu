@@ -6,12 +6,17 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 
 final configurations = Configurations();
 String selectedLanguageValue = "goods";
+String selectedLanguageLabel = "English";
 List<String> favorite = [];
 final List<Map<String, String>> supportedLanguages = [
   {'label': 'English', 'value': 'goods'},
   {'label': '简体中文', 'value': 'zh'},
   {'label': '한국어', 'value': 'ko'},
-  {'label': 'español', 'value': 'es'}
+  {'label': 'Español', 'value': 'es'},
+  {'label': 'Deustch', 'value': 'de'},
+  {'label': 'Français', 'value': 'fr'},
+  {'label': 'Italiano', 'value': 'it'},
+  {'label': 'Русский', 'value': 'ru'},
 ];
 Future<void> main() async {
   await Firebase.initializeApp(
